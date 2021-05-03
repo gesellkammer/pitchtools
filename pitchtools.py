@@ -201,7 +201,8 @@ class Converter:
             return f"{octave}{note}{microtonal_alteration}{cents}"
 
     def n2m(self, note: str) -> float:
-        """ Convert a notename to a midinote 
+        """ 
+        Convert a notename to a midinote 
 
         Args:
             note: the notename
@@ -216,7 +217,15 @@ class Converter:
         return self.m2f(n2m(note))
 
     def f2n(self, freq: float) -> str:
-        """ Return the notename corresponding to the given freq """
+        """ 
+        Return the notename corresponding to the given freq 
+
+        Args:
+            freq: the freq. to convert
+
+        Returns:
+            the corresponding notename
+        """
         return self.m2n(self.f2m(freq))
 
     def pianofreqs(self, start="A0", stop="C8") -> List[float]:
@@ -237,7 +246,26 @@ class Converter:
         return freqs
 
     def asmidi(self, x:U[int, float, str]) -> float:
-        """ Convert x to a midinote """
+        """ 
+        Convert x to a midinote 
+
+        Args:
+            x: an object which can be converted to a midinote (a freq., a notename)
+
+        Returns:
+            The corresponding midinote.
+
+        Example
+        -------
+
+        .. code::
+
+            >>> from pitchtools import *
+            >>> cnv = Converter()
+            >>> cnv.asmidi("4C+10Hz")
+            272.8
+
+        """
         if isinstance(x, str):
             return self.str2midi(x)
         else:
@@ -323,6 +351,21 @@ class Converter:
     def normalize_notename(self, notename: str) -> str:
         """ 
         Convert notename to its canonical form 
+
+        Args:
+            notename: the note to normalize
+
+        Returns:
+            the normalized notename
+
+        Example
+        -------
+
+        .. code::
+
+            >>> normalize_notename("a4+24")
+            4A+24
+
         """
         return self.m2n(self.n2m(notename))
 
@@ -347,9 +390,6 @@ def n2m(note: str) -> float:
         The second format, with its clear hierarchy ``octave:pitch:microtone`` is
         the canonical one and used when converting a midinote to a notename
 
-
-    Some examples
-    ~~~~~~~~~~~~~
 
     ========      ========
     Input         Output
@@ -582,7 +622,7 @@ def quantize_notename(notename: str, divisions_per_semitone) -> str:
         >>> quantize_notename("4A+18", 4)
         4A+25
 
-    
+
     See Also:
         `quantize_midinote`
     """
@@ -692,22 +732,22 @@ def alteration_to_cents(alteration: str) -> int:
     Returns:
         the alteration in cents
 
-    =============    =======
-     Alternation      Cents
-    =============    =======
-            #+         150
-            #>         125
-            #          100
-            #<         75
-            +          50
-            >          25
-            <          -25
-            -          -50
-            b>         -75
-            b          -100
-            b<         -125
-            b-         -150
-    =============    =======
+    =============  =======
+     Alternation    Cents
+    =============  =======
+        #+          150
+        #>          125
+        #           100
+        #<          75
+        \+          50
+        >           25
+        <           -25
+        \-          -50
+        b>          -75
+        b           -100
+        b<          -125
+        b-          -150
+    =============  =======
     
 
     """
@@ -1061,7 +1101,7 @@ def amp2db(amp: float) -> float:
     """
     convert amp (0, 1) to dB
 
-    20.0 * log10(amplitude)
+    ``20.0 * log10(amplitude)``
 
     Args:
         amp: the amplitude between 0 and 1
