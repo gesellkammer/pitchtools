@@ -1,5 +1,5 @@
 """
-Set of routinges to work with musical pitches, convert to and from frequencies, 
+Set of routines to work with musical pitches, convert to and from frequencies, 
 notenames, etc.
 
 Global settings vs Converter objects
@@ -51,10 +51,10 @@ _r2 = _re.compile(r"(?P<oct>[-]?\d+)(?P<pch>[A-Ha-h][b|#]?)(?P<micro>[-+><↓↑
 class NoteParts(NamedTuple):
     """
     Attributes:
-        octave: octave number, 4=central octave
-        noteName: "C", "D", "E", ... (diatonic step)
-        alteration: the alteration as str, "#", "b", "+", "-", ">", "<"
-        centsDeviation: number of cents deviation from the chromatic pitch
+        octave (int): octave number, 4=central octave
+        noteName (str: "C", "D", "E", ... (diatonic step)
+        alteration (str): the alteration as str, "#", "b", "+", "-", ">", "<"
+        centsDeviation (int): number of cents deviation from the chromatic pitch
     """
     octave: int
     noteName: str
@@ -70,10 +70,10 @@ class NoteParts(NamedTuple):
 class ParsedMidinote(NamedTuple):
     """
     Attributes:
-        pitchindex: 0=C, 1=C#, ...
-        deviation: in semitones, deviation from the chromatic pitch
-        octave: 4 = central octave
-        chromatic_pitch: the written pitch, "Eb", "F#", etc. No microtones
+        pitchindex (int): 0=C, 1=C#, ...
+        deviation (float): in semitones, deviation from the chromatic pitch
+        octave (int): 4 = central octave
+        chromatic_pitch (str): the written pitch, "Eb", "F#", etc. No microtones
     """
     pitchindex: int
     deviation: float
@@ -122,12 +122,18 @@ class Converter:
     def set_reference_freq(self, a4:float) -> None:
         """
         Set the reference freq. (the freq. of A4) for this converter
+
+        Args:
+            a4: the freq. of A4 in Hz
         """
         self.a4 = a4
 
     def get_reference_freq(self) -> float:
         """
         Get the reference frequency for this converter
+
+        Returns:
+            the freq. of A4
         """
         return self.a4
 
@@ -138,7 +144,10 @@ class Converter:
         Args:
             freq: the frequency to convert, in Hz
 
-        See also: set_reference_freq, temporaryA4
+        Returns:
+            the midi note corresponding to freq
+
+        **See also**: :meth:`~Converter-set_reference_freq`
         """
         if freq<9:
             return 0
@@ -150,6 +159,9 @@ class Converter:
 
         Args:
             freq: the freq. to round
+
+        Returns:
+            the rounded frequency
         """
         return self.m2f(round(self.f2m(freq)))
 
@@ -159,6 +171,9 @@ class Converter:
 
         Args:
             midinote: the midinote to convert to frequency
+
+        Returns:
+            the freq. corresponding to midinote
         """
         return 2**((midinote-69)/12.0)*self.a4
 
@@ -186,7 +201,14 @@ class Converter:
             return f"{octave}{note}{microtonal_alteration}{cents}"
 
     def n2m(self, note: str) -> float:
-        """ Convert a notename to a midinote """
+        """ Convert a notename to a midinote 
+
+        Args:
+            note: the notename
+
+        Returns:
+            the midinote corresponding to note
+        """
         return n2m(note)
 
     def n2f(self, note: str) -> float:
@@ -223,12 +245,15 @@ class Converter:
 
     def str2midi(self, s: str) -> float:
         """
-        Accepts all that n2m accepts but with the addition of
-        frequencies
+        Accepts all that n2m accepts but with the addition of frequencies
 
-        Possible values: "100hz", "200Hz", "4F+20hz", "8C-4hz"
+        Args:
+            s: pitch describes as a string. Possible values: "100hz", "4F+20hz", "8C-4hz"
 
-        The hz part must be at the end
+        Returns:
+            the corresponding midinote
+
+        **NB**: The hz part must be at the end
         """
         ending = s[-2:]
         if ending != "hz" and ending != "Hz":
@@ -255,8 +280,7 @@ class Converter:
 
     def midi_to_note_parts(self, midinote: float) -> NoteParts:
         """
-        Convert a midinote into its parts as a note: 
-            octave, notename, alteration, cents deviation
+        Convert a midinote into its parts as a note
 
         Args:
             midinote: the midinote to analyze
@@ -307,13 +331,22 @@ def n2m(note: str) -> float:
     """
     Convert a notename to a midinote
 
-    Two formats are supported (the 2nd format is preferable:
+    Args:
+        note: the notename
+
+    Returns:
+        the corresponding midi note
+
+    Two formats are supported:
 
     * 1st format: ``C#2``, ``D4``, ``Db4+20``, ``C4>``, ``Eb5<``
     * 2nd format: ``2C#``, ``4D+``, ``7Eb-14``
 
-    **NB**: the second format, with its clear hierarchy ``octave:pitch:microtone`` is
-    preferred
+    .. note::
+
+        The second format, with its clear hierarchy ``octave:pitch:microtone`` is
+        the canonical one and used when converting a midinote to a notename
+
 
     Some examples
     ~~~~~~~~~~~~~
@@ -414,8 +447,14 @@ def _pitchname(pitchidx: int, micro: float) -> str:
 
 def parse_midinote(midinote: float) -> ParsedMidinote:
     """
-    Convert a midinote into its pitch components: pitchindex, 
-    deviation, octave, chromaticPitch
+    Convert a midinote into its pitch components
+
+    Args:
+        midinote: the midinote, where 60 corresponds to central C (C4)
+
+    Returns:
+        a ParsedMidinote, which is a NamedTuple with fields pitchindex (int), 
+        deviation (in semitones, float), octave (int) and chromaticPitch (str)
 
     ======    =========
     Input     Output
@@ -447,15 +486,23 @@ def parse_midinote(midinote: float) -> ParsedMidinote:
 
 def ratio2interval(ratio: float) -> float:
     """
-    Given two frequencies f1 and f2, calculate the interval between them
+    Convert the ratio between 2 freqs. to their interval in semitones
+    
+    Args:
+        ratio: a ratio between two frequencies
+
+    Returns:
+        The interval (in semitones) between those frequencies
 
     Example
     =======
     
-    >>> f1 = n2f("C4")
-    >>> f2 = n2f("D4")
-    >>> ratio2interval(f2/f1)   
-    2
+    .. code::
+    
+        >>> f1 = n2f("C4")
+        >>> f2 = n2f("D4")
+        >>> ratio2interval(f2/f1)   
+        2
 
     """
     return 12 * math.log(ratio, 2)
@@ -463,16 +510,24 @@ def ratio2interval(ratio: float) -> float:
 
 def interval2ratio(interval: float) -> float:
     """
-    Calculate the ratio r so that f1*r gives f2 so that
-    the interval between f2 and f1 is the given one
+    Convert a semitone interval to a ratio between 2 freqs.
+
+    Args:
+        interval: an interval in semitones
+
+    Returns:
+        the ratio between frequencies corresponding to the given interval
+
 
     Example
     =======
 
-    >>> f1 = n2f("C4")
-    >>> r = interval2ratio(7)  # a 5th higher
-    >>> f2n(f1*r)  
-    4G
+    .. code::
+
+        >>> f1 = n2f("C4")
+        >>> r = interval2ratio(7)  # a 5th higher
+        >>> f2n(f1*r)  
+        4G
 
     """
     return 2 ** (interval / 12.0)
@@ -485,8 +540,7 @@ i2r = interval2ratio
 def quantize_midinote(midinote: float, divisions_per_semitone, method="round"
                       ) -> float:
     """
-    Quantize midinote to the next pitch in grid accordingto the semitone divisions
-    given.
+    Quantize midinote to the next semitone division
 
     Args:
         midinote: the midinote to round
@@ -510,9 +564,25 @@ def quantize_midinote(midinote: float, divisions_per_semitone, method="round"
 
 def quantize_notename(notename: str, divisions_per_semitone) -> str:
     """
-    Quantize notename to the next pitch in grid according to the semitone
-    divisions given.
+    Quantize notename to the next semitone divisions
 
+    Args:
+        notename: the notename to quantize
+        divisions_per_semitone: the number of divisions of the semitone 
+            (1 to quantize to nearest chromatic note)
+
+    Returns:
+        the notename of the quantized pitch
+
+    Example
+    -------
+
+    .. code::
+
+        >>> quantize_notename("4A+18", 4)
+        4A+25
+
+    
     See Also:
         `quantize_midinote`
     """
@@ -571,6 +641,13 @@ def construct_notename(octave:int, letter:str, alter:U[int, str], cents:int,
 def pitchbend2cents(pitchbend: int, maxcents=200) -> int:
     """
     Convert a MIDI pitchbend to its corresponding deviation in cents
+
+    Args:
+        pitchbend: the MIDI pitchbend value, between 0-16383 (8192 = 0 semitones)
+        maxcents: the cents corresponding to the max. bend
+
+    Returns:
+        the bend expressed in cents
     """
     return int(((pitchbend / 16383.0) * (maxcents * 2.0)) - maxcents + 0.5)
 
@@ -578,6 +655,13 @@ def pitchbend2cents(pitchbend: int, maxcents=200) -> int:
 def cents2pitchbend(cents: int, maxcents=200) -> int:
     """
     Convert a deviation in cents to the corresponding value as pitchbend.
+
+    Args:
+        cents: the bend interval, in cents
+        maxcents: the cents corresponding to the max. bend
+
+    Returns:
+        the bend MIDI value (between 0-16383)
     """
     return int((cents + maxcents) / (maxcents * 2.0) * 16383.0 + 0.5)
 
@@ -601,6 +685,12 @@ _centsrepr = {
 def alteration_to_cents(alteration: str) -> int:
     """
     Convert an alteration to its corresponding cents deviation
+
+    Args:
+        alteration: the alteration as str (see table below)
+
+    Returns:
+        the alteration in cents
 
     =============    =======
      Alternation      Cents
@@ -640,6 +730,7 @@ def _parse_centstr(centstr: str) -> int:
 def split_notename(notename: str) -> Tuple[int, str, str, int]:
     """
     Return (octave, letter, alteration (#, b), cents)
+
     Microtonal alterations, like "+", "-", ">", "<" are resolved
     into cents alterations
 
@@ -694,11 +785,16 @@ def split_notename(notename: str) -> Tuple[int, str, str, int]:
 
 def split_cents(notename: str) -> Tuple[str, int]:
     """
-    Split a notename into the chromatic note and the cents deviation,
-    as a negative or possitive integer
+    Split a notename into the chromatic note and the cents deviation.
+
+    The cents deviation can be a negative or possitive integer
 
     Args:
         notename: the notename to split
+
+    Returns:
+        the chromatic pitch and the cents deviation from this chromatic pitch
+
 
     ========   ============
     Input      Output
@@ -715,9 +811,18 @@ def split_cents(notename: str) -> Tuple[str, int]:
 
 def enharmonic(notename: str) -> str:
     """
-    Return the enharmonic version of notename. Notes without an alteration
-    have no enharmonic (double alterations are never used)
+    Return the enharmonic version of notename. 
 
+    Notes without an alteration have no enharmonic 
+    (double alterations are never used)
+
+
+    Args:
+        notename: the notename to find an enharmonic to
+
+    Returns:
+        the enharmonic version of the note (this can be the
+        same as the original)
 
     ==========     ============
     original       enharmonic
@@ -768,8 +873,9 @@ def enharmonic(notename: str) -> str:
 
 def pitch_round(midinote: float, semitoneDivisions=4) -> Tuple[str,int]:
     """
-    Round midinote to the next (possibly microtonal) pitch according to
-    semitoneDivisions. Returns the rounded notename and the cents deviation
+    Round midinote to the next (possibly microtonal) pitch
+
+    Returns the rounded notename and the cents deviation
     from the original pitch to the next semitone
 
     Args:
@@ -782,11 +888,13 @@ def pitch_round(midinote: float, semitoneDivisions=4) -> Tuple[str,int]:
     Example
     =======
 
-    >>> pitch_round(60.1)
-    ("4C", 10)
-    >>> pitch_round(60.75)
-    ("4D<", -25)
-    
+    .. code::
+        
+        >>> pitch_round(60.1)
+        ("4C", 10)
+        >>> pitch_round(60.75)
+        ("4D<", -25)
+        
     """
     rounding_factor = 1 / semitoneDivisions
     rounded_midinote = round(midinote/rounding_factor)*rounding_factor
@@ -811,6 +919,13 @@ def freq2mel(freq: float) -> float:
 def mel2freq(mel:float) -> float:
     """
     Convert a position in the mel-scale to its corresponding frequency
+
+    Args:
+        mel: the mel index (can be fractional)
+
+    Returns:
+        the corresponding freq. in Hz
+
 
     .. note::
         The mel scale is a perceptual scale of pitches judged by listeners to be
