@@ -74,6 +74,8 @@ _r2 = _re.compile(r"(?P<oct>[-]?\d+)(?P<pch>[A-Ha-h][b|#]?)(?P<micro>[-+><↓↑
 
 class NoteParts(NamedTuple):
     """
+    Represents the parts of a note
+
     Attributes:
         octave (int): octave number, 4=central octave
         diatonic_name (str: "C", "D", "E", ... (diatonic step)
@@ -265,7 +267,7 @@ class Converter:
 
     def pianofreqs(self, start="A0", stop="C8") -> List[float]:
         """
-        Generate an array of the frequencies representing all the piano keys
+        Generate an array of the frequencies for all the piano keys
 
         Args:
             start: the starting note
@@ -1071,6 +1073,14 @@ def _roundres(x:float, resolution:float) -> float:
 
 
 def vertical_position(note: str) -> int:
+    """
+    Return the vertical notated position of a note
+
+    The only relevant information for the vertical position
+    is the octave and the diatonic pitch class. So, 4G# and 4G
+    have the same vertical position, 4Ab and 4G# do not (the vertical
+    position of 4Ab is 4*7+6=34, for 4G# it is 33)
+    """
     notated = notated_pitch(note)
     return notated.vertical_position()
 
