@@ -42,6 +42,30 @@ number_t = U[int, float]
 _flats  = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B", "C"]
 _sharps = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C"]
 
+_pitch_class = {
+    'C': 0,
+    'C#': 1,
+    'Db': 1,
+    'D': 2,
+    'D#': 3,
+    'Eb': 3,
+    'E': 4,
+    'E#': 5,
+    'Fb': 4,
+    'F': 5,
+    'F#': 6,
+    'Gb': 6,
+    'G': 7,
+    'G#': 8,
+    'Ab': 8,
+    'A': 9,
+    'A#': 10,
+    'Bb': 10,
+    'B': 11,
+    'B#': 0,
+    'Cb': 11,
+}
+
 _notes2 = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
 
 _r1 = _re.compile(r"(?P<pch>[A-Ha-h][b|#]?)(?P<oct>[-]?[\d]+)(?P<micro>[-+><↓↑][\d]*)?")
@@ -52,19 +76,22 @@ class NoteParts(NamedTuple):
     """
     Attributes:
         octave (int): octave number, 4=central octave
-        noteName (str: "C", "D", "E", ... (diatonic step)
+        diatonic_name (str: "C", "D", "E", ... (diatonic step)
         alteration (str): the alteration as str, "#", "b", "+", "-", ">", "<"
-        centsDeviation (int): number of cents deviation from the chromatic pitch
+        cents_deviation (int): number of cents deviation from the chromatic pitch
     """
     octave: int
-    noteName: str
+    diatonic_name: str
     alteration: str
-    centsDeviation: int
+    cents_deviation: int
 
     @property
-    def alterationCents(self) -> int:
+    def alteration_cents(self) -> int:
         return alteration_to_cents(self.alteration)
 
+    @property
+    def diatonic_step(self) -> int:
+        return 'ABCDEFGAB'.index(self.diatonic_name)
 
 
 class ParsedMidinote(NamedTuple):
@@ -86,21 +113,29 @@ class NotatedPitch(NamedTuple):
     Attributes:
         octave: the octave (4=central octave)
         diatonic_index: 0=C, 1=D, 2=E, ...
-        diatonic_step: "C", "D", "E", ...
+        diatonic_name: "C", "D", "E", ...
         chromatic_index: 0=C, 1=C#, 2=D, ...
-        chromatic_step: "C", "Db", ...
-        diatonic_alteration: for C# this would be 1.0, for Db this would be -1.0
+        chromatic_name: "C", "Db", ...
+        diatonic_alteration: the alteration in relation to the diatonic pitch
+            For C# this would be 1.0, for Db this would be -1.0
         chromatic_alteration: for C#+50 this would be 0.5
         accidental_name: the name of the accidental used ('natural', 'natural-up','quarter-sharp', etc.)
     """
     octave: int
     diatonic_index: int
-    diatonic_step: str
+    diatonic_name: str
     chromatic_index: int
-    chromatic_step: str
+    chromatic_name: str
     diatonic_alteration: float
     chromatic_alteration: float
     accidental_name: str
+
+    @property
+    def vertical_position(self) -> int:
+        """
+        Abstract value indicating the vertical notated position 
+        """
+        return self.octave * 7 + self.diatonic_index
 
 
 class Converter:
@@ -314,8 +349,8 @@ class Converter:
             midinote: the midinote to analyze
 
         Returns:
-            a NoteParts instance, a named tuple with the fields: `octave`, `noteName`,
-            `alteracion` and `centsDeviation`
+            a NoteParts instance, a named tuple with the fields: `octave`, `notename`,
+            `alteracion` and `cents_deviation`
 
         """
         i = int(midinote)
@@ -767,7 +802,7 @@ def _parse_centstr(centstr: str) -> int:
     return cents
 
 
-def split_notename(notename: str) -> Tuple[int, str, str, int]:
+def split_notename(notename: str) -> NoteParts:
     """
     Return (octave, letter, alteration (#, b), cents)
 
@@ -820,7 +855,7 @@ def split_notename(notename: str) -> Tuple[int, str, str, int]:
             else:
                 centstr = rest
             cents = _parse_centstr(centstr)
-    return octave, letter.upper(), alter, cents
+    return NoteParts(octave, letter.upper(), alter, cents)
 
 
 def split_cents(notename: str) -> Tuple[str, int]:
@@ -844,10 +879,9 @@ def split_cents(notename: str) -> Tuple[str, int]:
     ========   ============
 
     """
-    octave, letter, alter, cents = split_notename(notename)
-    alterchar = "b" if alter == -1 else "#" if alter == 1 else ""
-    return str(octave) + letter + alterchar, cents
-
+    parts = split_notename(notename)
+    return f"{parts.octave}{parts.diatonic_name}{parts.alteration}", parts.cents_deviation
+    
 
 def enharmonic(notename: str) -> str:
     """
@@ -913,7 +947,7 @@ def enharmonic(notename: str) -> str:
 
 def pitch_round(midinote: float, semitoneDivisions=4) -> Tuple[str,int]:
     """
-    Round midinote to the next (possibly microtonal) pitch
+    Round midinote to the next (possibly microtonal) note
 
     Returns the rounded notename and the cents deviation
     from the original pitch to the next semitone
@@ -993,12 +1027,12 @@ _centsToAccidentalName = {
 }
 
 
-def accidental_name(alterationCents: int, semitoneDivisions=4) -> str:
+def accidental_name(alteration_cents: int, semitoneDivisions=4) -> str:
     """
     The name of the accidental corresponding to the given cents
 
     Args:
-        alterationCents: 100 = sharp, -50 = quarter-flat, etc.
+        alteration_cents: 100 = sharp, -50 = quarter-flat, etc.
         semitoneDivisions: number of divisions of the semitone
 
     Returns:
@@ -1024,29 +1058,57 @@ def accidental_name(alterationCents: int, semitoneDivisions=4) -> str:
             -150    three-quarters-flat
     """
     assert semitoneDivisions in {1, 2, 4}, "semitoneDivisions should be 1, 2, or 4"
-    if alterationCents < -150 or alterationCents > 150:
-        raise ValueError(f"alterationCents should be between -150 and 150, "
-                         f"got {alterationCents}")
+    if alteration_cents < -150 or alteration_cents > 150:
+        raise ValueError(f"alteration_cents should be between -150 and 150, "
+                         f"got {alteration_cents}")
     centsResolution = 100 // semitoneDivisions
-    alterationCents = round(alterationCents / centsResolution) * centsResolution
-    return _centsToAccidentalName[alterationCents]
+    alteration_cents = round(alteration_cents / centsResolution) * centsResolution
+    return _centsToAccidentalName[alteration_cents]
 
 
 def _roundres(x:float, resolution:float) -> float:
     return round(x/resolution)*resolution
 
 
-def notated_pitch(midinote: float, divsPerSemitone=4) -> NotatedPitch:
+def vertical_position(note: str) -> int:
+    notated = notated_pitch(note)
+    return notated.vertical_position()
+
+
+def notated_pitch(pitch: U[float, str], divsPerSemitone=4) -> NotatedPitch:
     """
     Convert a (fractional) midinote to a NotatedPitch
 
     Args:
-        midinote: a midinote as float (60=4C)
+        midinote: a midinote as float (60=4C), or a notename
         divsPerSemitone: number of divisions per semitone
 
     Returns:
         the corresponding pitch as NotatedPitch
     """
+    
+    if isinstance(pitch, (int, float)):
+        return _notated_pitch_midinote(pitch, divsPerSemitone)
+    return _notated_pitch_notename(pitch)
+
+
+def _notated_pitch_notename(notename: str) -> NotatedPitch:
+    parts = split_notename(notename)
+    diatonic_index = 'ABCDEFGAB'.index(parts.diatonic_name)
+    chromatic_note = parts.diatonic_name + parts.alteration
+    cents = parts.cents_deviation
+    diatonic_alteration = (alteration_to_cents(parts.alteration)+cents) / 100
+    NotatedPitch(octave=parts.octave,
+                 diatonic_index=diatonic_index, 
+                 diatonic_name=parts.diatonic_name,
+                 chromatic_index=_pitch_class[chromatic_note],
+                 chromatic_name=chromatic_note,
+                 diatonic_alteration=diatonic_alteration,
+                 chromatic_alteration=cents/100,
+                 accidental_name=accidental_name(int(diatonic_alteration*100)))
+
+
+def _notated_pitch_midinote(midinote: float, divsPerSemitone=4) -> NotatedPitch:
     rounded_midinote = _roundres(midinote, 1/divsPerSemitone)
     parsed_midinote = parse_midinote(rounded_midinote)
     notename = m2n(rounded_midinote)
@@ -1061,9 +1123,9 @@ def notated_pitch(midinote: float, divsPerSemitone=4) -> NotatedPitch:
 
     return NotatedPitch(octave=octave,
                         diatonic_index=diatonic_index,
-                        diatonic_step=letter,
+                        diatonic_name=letter,
                         chromatic_index=parsed_midinote.pitchindex,
-                        chromatic_step=chromaticStep,
+                        chromatic_name=chromaticStep,
                         diatonic_alteration=diatonicAlteration,
                         chromatic_alteration=cents/100,
                         accidental_name=accidental_name(int(diatonicAlteration*100)))
