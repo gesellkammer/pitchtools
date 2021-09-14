@@ -97,7 +97,7 @@ classifiers = """
 """
 
 setup(name='pitchtools',
-      version='1.1.0',
+      version='1.2.0',
       description='Utilities to convert between midinotes, frequency and notenames', 
       long_description=__doc__,
       classifiers=list(filter(None, classifiers.split('\n'))),
