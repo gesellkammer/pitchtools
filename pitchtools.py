@@ -34,7 +34,7 @@ import math
 import sys
 import re as _re
 from typing import Tuple, List, NamedTuple, Union as U
-from functools import lru_cache as _cache
+from functools import cache as _cache
 
 
 _EPS = sys.float_info.epsilon
@@ -557,6 +557,7 @@ class Converter:
         return midinotes
 
 
+@_cache
 def n2m(note: str) -> float:
     """
     Convert a notename to a midinote
@@ -962,6 +963,7 @@ def _parse_centstr(centstr: str) -> int:
     return cents
 
 
+@_cache
 def split_notename(notename: str) -> NoteParts:
     """
     Return (octave, letter, alteration (#, b), cents)
@@ -1248,6 +1250,7 @@ def _roundres(x:float, resolution:float) -> float:
     return round(x/resolution)*resolution
 
 
+@_cache
 def vertical_position(note: str) -> int:
     """
     Return the vertical notated position of a note
@@ -1258,10 +1261,19 @@ def vertical_position(note: str) -> int:
     position of 4Ab is 4*7+6=34, for 4G# it is 33)
     """
     notated = notated_pitch(note)
-    return notated.vertical_position()
+    return notated.vertical_position
 
 
-@_cache(maxsize=0)
+def vertical_position_to_note(pos: int) -> str:
+    # CDEFGAB
+    # 0123456
+    octave = pos // 7
+    diatonic_step = pos % 7
+    step = "CDEFGAB"[diatonic_step]
+    return f"{octave}{step}"
+
+
+@_cache
 def notated_pitch(pitch: U[float, str], divsPerSemitone=4) -> NotatedPitch:
     """
     Convert a note or a (fractional) midinote to a NotatedPitch
@@ -1280,9 +1292,11 @@ def notated_pitch(pitch: U[float, str], divsPerSemitone=4) -> NotatedPitch:
     return _notated_pitch_notename(pitch)
 
 
+@_cache
 def _notated_pitch_notename(notename: str) -> NotatedPitch:
     parts = split_notename(notename)
     diatonic_index = 'CDEFGABC'.index(parts.diatonic_name)
+    # diatonic_index = ord(parts.diatonic_name) - 67
     chromatic_note = parts.diatonic_name + parts.alteration
     cents = parts.cents_deviation
     diatonic_alteration = (alteration_to_cents(parts.alteration)+cents) / 100
