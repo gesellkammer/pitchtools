@@ -127,6 +127,8 @@ _cents_repr_quartertones = {
     -50: '-'
 }
 
+_black_key_indexes = {1, 3, 6, 8, 10}
+
 
 def cents_repr(cents:int, eighthToneShortcuts=True) -> str:
     """
@@ -190,11 +192,11 @@ class NotatedPitch:
 
     @property
     def is_white_key(self) -> bool:
-        return self.diatonic_alteration == 0
+        return self.chromatic_index not in _black_key_indexes
 
     @property
     def is_black_key(self) -> bool:
-        return not(self.is_white_key)
+        return self.chromatic_index in _black_key_indexes
 
     @property
     def cents_deviation(self) -> int:
