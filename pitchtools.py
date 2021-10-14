@@ -21,7 +21,7 @@ Example
     443.0
 
     # Create a Converter object
-    >>> cnv = Converter(a4=435)
+    >>> cnv = PitchConverter(a4=435)
     >>> print(cnv.n2f("4C"))
     258.7
 
@@ -29,18 +29,18 @@ Example
 
 from __future__ import annotations
 
-import dataclasses
+from dataclasses import dataclass
 import math
 import sys
 import re as _re
-from typing import Tuple, List, NamedTuple, Union as U
+import itertools as _itertools
 from functools import cache as _cache
-
+from typing import TYPE_CHECKING, NamedTuple
+if TYPE_CHECKING or 'sphinx' in sys.modules:
+    from typing import *
+    number_t = Union[int, float]
 
 _EPS = sys.float_info.epsilon
-
-
-number_t = U[int, float]
 
 _flats  = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B", "C"]
 _sharps = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C"]
@@ -151,7 +151,7 @@ def cents_repr(cents:int, eighthToneShortcuts=True) -> str:
         return f'+{cents}' if cents > 0 else str(cents)
 
 
-@dataclasses.dataclass
+@dataclass
 class NotatedPitch:
     """
     A NotatedPitch is a parsed notename which can be queried in relation
@@ -189,6 +189,31 @@ class NotatedPitch:
         Abstract value indicating the vertical notated position 
         """
         return self.octave * 7 + self.diatonic_index
+
+    @property
+    def midinote(self) -> float:
+        return (self.octave+1)*12 + self.chromatic_index + self.chromatic_alteration
+
+    def microtone_index(self, divs_per_semitone=2) -> int:
+        """The index of the nearest microtone
+
+        For example, if divs_per_semitone is 2, then
+
+        ====   ================
+        note   microtone index
+        ====   ================
+        4C     0
+        5C     0
+        4C+    1
+        4C#    2
+        4Db    2
+        …      …
+        ====   ================
+        """
+        m = self.midinote
+        quantized = round(m*divs_per_semitone)/divs_per_semitone
+        idx = quantized%12
+        return int(idx*divs_per_semitone)
 
     @property
     def is_white_key(self) -> bool:
@@ -252,7 +277,7 @@ class NotatedPitch:
         return 0
 
 
-class Converter:
+class PitchConverter:
     """
     Convert between midinote, frequency and notename.
 
@@ -296,7 +321,7 @@ class Converter:
         Returns:
             the midi note corresponding to freq
 
-        **See also**: :meth:`~Converter-set_reference_freq`
+        **See also**: :meth:`~PitchConverter-set_reference_freq`
         """
         if freq<9:
             return 0
@@ -394,7 +419,7 @@ class Converter:
         freqs = [self.m2f(m) for m in midinotes]
         return freqs
 
-    def asmidi(self, x:U[int, float, str]) -> float:
+    def asmidi(self, x:Union[int, float, str]) -> float:
         """ 
         Convert x to a midinote 
 
@@ -410,7 +435,7 @@ class Converter:
         .. code::
 
             >>> from pitchtools import *
-            >>> cnv = Converter()
+            >>> cnv = PitchConverter()
             >>> cnv.asmidi("4C+10Hz")
             272.8
 
@@ -518,7 +543,7 @@ class Converter:
         """
         return self.m2n(self.n2m(notename))
 
-    def as_midinotes(self, x: U[List[pitch_t], List[str], str, float]) -> List[float]:
+    def as_midinotes(self, x: Union[List[pitch_t], List[str], str, float]) -> List[float]:
         """
         Tries to interpret `x` as a list of pitches, returns these as midinotes
 
@@ -833,7 +858,7 @@ def quantize_notename(notename: str, divisions_per_semitone) -> str:
     return construct_notename(octave, letter, alter, cents)
 
 
-def construct_notename(octave:int, letter:str, alter:U[int, str], cents:int,
+def construct_notename(octave:int, letter:str, alter:Union[int, str], cents:int,
                        normalize=False) -> str:
     """
     Utility function to construct a valid notename
@@ -1164,6 +1189,83 @@ def pitch_round(midinote: float, semitoneDivisions=4) -> Tuple[str,int]:
     return notename, centsdev
 
 
+def notated_interval(n0: str, n1: str) -> Tuple[int, float]:
+    """
+    Gives information regarding the notated interval between n0 and n1
+
+    Args:
+        n0: the first notename
+        n1: the second notename
+
+    Return:
+        a tuple (delta vertical position, delta midinote).
+
+    Examples
+    ~~~~~~~~
+
+    >>> notated_interval("4C", "4D")
+    (1, 2)        # 1 vertical step, 2 semitone steps
+    >>> notated_interval("4C", "4C+")
+    (0, 0.5)
+    >>> notated_interval("4C", "4Db")
+    (1, 1)
+    >>> notated_interval("4Db", "4C")
+    (-1, -1)
+
+    """
+    vertpos0 = vertical_position(n0)
+    vertpos1 = vertical_position(n1)
+    return (vertpos1-vertpos0, n2m(n1)-n2m(n0))
+
+
+def enharmonic_variations(notes: Sequence[str],
+                          fixedslots:Dict[int, Optional[int]]=None,
+                          ) -> List[Tuple[str]]:
+    """
+    Generates all enharmonic variations of the given notes
+
+    Args:
+        notes: a list of notenames
+        fixedslots: a dict of slot:alteration_direction, fixes the given slots
+            to a given alteration direction (1=#, -1=b). If Slot 0 corresponds to C,
+            1 to C+/Db-, 2 to C#/Db, etc.
+
+    Returns:
+        a list of enharmonic alternatives
+
+    """
+    # C C+ C# D- D D+ D# E- E E+ F F+ F# G- G G+ G# A- A A+ A# B- B B+
+    # 0 1  2  3  4 5  6  7  8 9  0 1  2  3  4 5  6  7  8 9  0  1  2 3
+    non_enharmonic_slots = {0, 4, 8, 10, 14, 18, 22}
+    variants_per_note = [(n, enharmonic(n)) for n in notes]
+    allvariants: List[Tuple[str]] = []
+    if fixedslots is None:
+        fixedslots = {}
+    for indexes in _itertools.product(*[(0, 1)] * len(notes)):
+        # indexes contains a row of the form (0, 0, 1) for 3 notes
+        row: List[str] = []
+        rowslots = fixedslots.copy()
+        for idx, variants in zip(indexes, variants_per_note):
+            notename = variants[idx]
+            notated = notated_pitch(notename)
+            slotindex = notated.microtone_index(divs_per_semitone=2)
+            if slotindex in non_enharmonic_slots:
+                row.append(notename)
+                continue
+            fixed_dir = rowslots.get(slotindex)
+            if fixed_dir is None or fixed_dir == 0 or fixed_dir == notated.alteration_direction():
+                rowslots[slotindex] = notated.alteration_direction()
+                row.append(notename)
+            else:
+                # the slot has an opposite direction, for example one note
+                # was spelled C#, so we can't accept Db as alteration
+                break
+        if len(row) == len(notes):
+            # a valid row
+            allvariants.append(tuple(row))
+    return list(set(allvariants))
+
+
 def freq2mel(freq: float) -> float:
     """
     Convert a frequency to its place in the mel-scale
@@ -1275,8 +1377,7 @@ def vertical_position_to_note(pos: int) -> str:
     return f"{octave}{step}"
 
 
-@_cache
-def notated_pitch(pitch: U[float, str], divsPerSemitone=4) -> NotatedPitch:
+def notated_pitch(pitch: Union[float, str], divsPerSemitone=4) -> NotatedPitch:
     """
     Convert a note or a (fractional) midinote to a NotatedPitch
 
@@ -1288,7 +1389,6 @@ def notated_pitch(pitch: U[float, str], divsPerSemitone=4) -> NotatedPitch:
     Returns:
         the corresponding pitch as NotatedPitch
     """
-    
     if isinstance(pitch, (int, float)):
         return _notated_pitch_midinote(pitch, divsPerSemitone)
     return _notated_pitch_notename(pitch)
@@ -1312,6 +1412,7 @@ def _notated_pitch_notename(notename: str) -> NotatedPitch:
                         accidental_name=accidental_name(int(diatonic_alteration*100)))
 
 
+@_cache
 def _notated_pitch_midinote(midinote: float, divsPerSemitone=4) -> NotatedPitch:
     rounded_midinote = _roundres(midinote, 1/divsPerSemitone)
     parsed_midinote = parse_midinote(rounded_midinote)
@@ -1335,9 +1436,46 @@ def _notated_pitch_midinote(midinote: float, divsPerSemitone=4) -> NotatedPitch:
                         accidental_name=accidental_name(int(diatonicAlteration*100)))
 
 
+def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
+                ) -> Tuple[int, int]:
+    """
+    Find the ratio between n1 and n2
+
+    Args:
+        n1: first note (a midinote or a notename)
+        n2: second note (a midinote or a notename)
+        maxdenominator: the maximum denominator possible
+
+    Returns:
+        a Fraction with the ratio between the two notes
+
+    NB: to obtain the ratios of the harmonic series, the second note
+        should match the intonation of the corresponding overtone of
+        the first note
+
+    ======  =======   =====
+    Note 1  Note 2    Ratio
+    ======  =======   =====
+    C4      D4        8/9
+    C4      Eb4+20    5/6
+    C4      E4        4/5
+    C4      F#4-30    5/7
+    C4      G4        2/3
+    C4      A4        3/5
+    C4      Bb4-30    4/7
+    C4      B4        8/15
+    """
+    f1 = n2f(n1) if isinstance(n1, str) else m2f(n1)
+    f2 = n2f(n2) if isinstance(n2, str) else m2f(n2)
+    from fractions import Fraction
+    fraction = Fraction.from_float(f1/f2).limit_denominator(maxdenominator)
+    return fraction.numerator, fraction.denominator
+
+
+
 # --- Global functions ---
 
-_converter = Converter()
+_converter = PitchConverter()
 midi_to_note_parts = _converter.midi_to_note_parts
 set_reference_freq = _converter.set_reference_freq
 get_reference_freq = _converter.get_reference_freq

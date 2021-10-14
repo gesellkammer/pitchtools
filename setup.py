@@ -41,7 +41,7 @@ The same but with a different reference frequency
 
     from pitchtools import *
     ebscale = "4Eb 4F 4G 4Ab 4Bb 5C 5D".split()
-    cnv = Converter(a4=435)
+    cnv = PitchConverter(a4=435)
     for note in ebscale:
         # Convert to frequency with default a4=442 Hz
         freq = cnv.n2f(note)
