@@ -36,7 +36,7 @@ import re as _re
 import itertools as _itertools
 from functools import cache as _cache
 from typing import TYPE_CHECKING, NamedTuple
-if TYPE_CHECKING or 'sphinx' in sys.modules:
+if TYPE_CHECKING:
     from typing import *
     number_t = Union[int, float]
 
@@ -140,6 +140,8 @@ def cents_repr(cents:int, eighthToneShortcuts=True) -> str:
     0          ''
     15         +15
     25
+    ======   =======================
+
     """
     if eighthToneShortcuts:
         shortcut = _cents_repr_eighthtones.get(cents)
@@ -1100,6 +1102,8 @@ def enharmonic(notename: str) -> str:
     4A+10  4A+10         -
     4E-25  4E-25         -
     4E-    4D#+          x
+    =====  ===========  ================
+    
     """
     p = notated_pitch(notename)
     if abs(p.diatonic_alteration) < 1:
@@ -1464,6 +1468,8 @@ def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
     C4      A4        3/5
     C4      Bb4-30    4/7
     C4      B4        8/15
+    ======  =======   =====
+    
     """
     f1 = n2f(n1) if isinstance(n1, str) else m2f(n1)
     f2 = n2f(n2) if isinstance(n2, str) else m2f(n2)
