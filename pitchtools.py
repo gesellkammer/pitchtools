@@ -506,6 +506,8 @@ class PitchConverter:
                 return NoteParts(octave, _sharps[ps+1], "-", 0)
             return NoteParts(octave, _sharps[ps], "+", 0)
         elif cents == 25 and self.eighthnote_symbol:
+            if ps in (6, 10,):
+                return NoteParts(octave, _flats[ps], ">", 0)
             return NoteParts(octave, _sharps[ps], ">", 0)
         elif cents == 75 and self.eighthnote_symbol:
             ps += 1
@@ -983,12 +985,19 @@ def alteration_to_cents(alteration: str) -> int:
     return cents
 
 
+def _asint(x):
+    try:
+        return int(x)
+    except ValueError:
+        return None
+
+
 def _parse_centstr(centstr: str) -> int:
     if not centstr:
         return 0
     cents = _centsrepr.get(centstr)
     if cents is None:
-        cents = int(centstr)
+        cents = _asint(centstr)
     return cents
 
 
@@ -1027,9 +1036,8 @@ def split_notename(notename: str) -> NoteParts:
             octave = int(notename[1])
             cursor = 2
         centstr = notename[cursor:]
-        try:
-            cents = _parse_centstr(centstr)
-        except ValueError:
+        cents = _parse_centstr(centstr)
+        if cents is None:
             raise ValueError(f"Could not parse cents '{centstr}' while parsing note '{notename}'")
     else:
         # 4C#-10
@@ -1049,6 +1057,8 @@ def split_notename(notename: str) -> NoteParts:
             else:
                 centstr = rest
             cents = _parse_centstr(centstr)
+            if cents is None:
+                raise ValueError(f"Could not parse cents '{centstr}' while parsing note '{notename}'")
     return NoteParts(octave, letter.upper(), alter, cents)
 
 
