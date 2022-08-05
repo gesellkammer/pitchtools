@@ -1234,6 +1234,7 @@ def notated_interval(n0: str, n1: str) -> Tuple[int, float]:
 
 def enharmonic_variations(notes: Sequence[str],
                           fixedslots:Dict[int, Optional[int]]=None,
+                          force=False
                           ) -> List[Tuple[str]]:
     """
     Generates all enharmonic variations of the given notes
@@ -1277,7 +1278,12 @@ def enharmonic_variations(notes: Sequence[str],
         if len(row) == len(notes):
             # a valid row
             allvariants.append(tuple(row))
-    return list(set(allvariants))
+    out = list(set(allvariants))
+    if out:
+        return out
+    if force:
+        return [tuple(notes)]
+    return []
 
 
 def freq2mel(freq: float) -> float:
