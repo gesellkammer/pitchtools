@@ -26,7 +26,6 @@ Example
     258.7
 
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,10 +34,10 @@ import sys
 import re as _re
 import itertools as _itertools
 from functools import cache as _cache
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from typing import *
-    number_t = Union[int, float]
+    from typing import Union
+    pitch_t = Union[str, float, int]
 
 _EPS = sys.float_info.epsilon
 
@@ -75,7 +74,8 @@ _r1 = _re.compile(r"(?P<pch>[A-Ha-h][b|#]?)(?P<oct>[-]?[\d]+)(?P<micro>[-+><↓�
 _r2 = _re.compile(r"(?P<oct>[-]?\d+)(?P<pch>[A-Ha-h][b|#]?)(?P<micro>[-+><↓↑]\d*)?")
 
 
-class NoteParts(NamedTuple):
+@dataclass
+class NoteParts:
     """
     Represents the parts of a note, returned by parse_midinote
 
@@ -86,21 +86,33 @@ class NoteParts(NamedTuple):
         cents_deviation (int): number of cents deviation from the chromatic pitch
     """
     octave: int
+    """octave number, 4=central octave"""
+
     diatonic_name: str
+    """name of the diatonic step ('C', 'D', 'E', etc.)"""
+
     alteration: str
+    """The alteration as str: '#', 'b', '+', '-', '>', '<'"""
+
     cents_deviation: int
+    """Number of cents deviation from the chromatic pitch"""
 
     @property
     def alteration_cents(self) -> int:
+        """The cents corresponding to the alteration"""
         return alteration_to_cents(self.alteration)
 
     @property
     def diatonic_step(self) -> int:
+        """The diatonic step as an index, where 0 is C"""
         return 'CDEFGABC'.index(self.diatonic_name)
 
 
-class ParsedMidinote(NamedTuple):
+@dataclass
+class ParsedMidinote:
     """
+    Represents the parts of a pitch as represented by a midinote
+
     Attributes:
         pitchindex (int): 0=C, 1=C#, ...
         deviation (float): in semitones, deviation from the chromatic pitch
@@ -404,7 +416,7 @@ class PitchConverter:
         """
         return self.m2n(self.f2m(freq))
 
-    def pianofreqs(self, start="A0", stop="C8") -> List[float]:
+    def pianofreqs(self, start="A0", stop="C8") -> list[float]:
         """
         Generate an array of the frequencies for all the piano keys
 
@@ -421,7 +433,7 @@ class PitchConverter:
         freqs = [self.m2f(m) for m in midinotes]
         return freqs
 
-    def asmidi(self, x:Union[int, float, str]) -> float:
+    def asmidi(self, x:int|float|str) -> float:
         """ 
         Convert x to a midinote 
 
@@ -547,7 +559,7 @@ class PitchConverter:
         """
         return self.m2n(self.n2m(notename))
 
-    def as_midinotes(self, x: Union[List[pitch_t], List[str], str, float]) -> List[float]:
+    def as_midinotes(self, x) -> list[float]:
         """
         Tries to interpret `x` as a list of pitches, returns these as midinotes
 
@@ -571,7 +583,7 @@ class PitchConverter:
         """
         if isinstance(x, str):
             notenames = x.split()
-            midinotes = [self.str2midi(n) for n in notenames]
+            return [self.str2midi(n) for n in notenames]
         elif isinstance(x, (list, tuple)):
             midinotes = []
             for n in x:
@@ -580,12 +592,12 @@ class PitchConverter:
                 elif isinstance(n, (int, float)):
                     midinotes.append(n)
                 else:
-                    raise TypeError(misc.type_error_msg(n, str, int, float))
+                    raise TypeError(f"Expected a str, an int or a float, got {n}")
+            return midinotes
         elif isinstance(x, (float, int)):
-            midinotes = [x]
+            return [x]
         else:
-            raise TypeError(misc.type_error_msg(x, str, 'list[str]', 'list[float]'))
-        return midinotes
+            raise TypeError(f"Expected a str, list of str or list of float, got {x}")
 
 
 @_cache
@@ -681,6 +693,17 @@ def n2m(note: str) -> float:
 
 
 def is_valid_notename(notename: str, minpitch=12) -> bool:
+    """
+    Returns true if *notename* is valid
+
+    Args:
+        notename: the notename to check
+        minpitch: a min. midi note
+
+    Returns:
+        True if this is a valid notename
+
+    """
     try:
         midi = n2m(notename)
         return midi >= minpitch
@@ -1063,7 +1086,7 @@ def split_notename(notename: str) -> NoteParts:
     return NoteParts(octave, letter.upper(), alter, cents)
 
 
-def split_cents(notename: str) -> Tuple[str, int]:
+def split_cents(notename: str) -> tuple[str, int]:
     """
     Split a notename into the chromatic note and the cents deviation.
 
@@ -1170,7 +1193,7 @@ def enharmonic(notename: str) -> str:
         return f"{p.octave}{chrom}{centstr}"
 
 
-def pitch_round(midinote: float, semitoneDivisions=4) -> Tuple[str,int]:
+def pitch_round(midinote: float, semitoneDivisions=4) -> tuple[str,int]:
     """
     Round midinote to the next (possibly microtonal) note
 
@@ -1204,7 +1227,7 @@ def pitch_round(midinote: float, semitoneDivisions=4) -> Tuple[str,int]:
     return notename, centsdev
 
 
-def notated_interval(n0: str, n1: str) -> Tuple[int, float]:
+def notated_interval(n0: str, n1: str) -> tuple[int, float]:
     """
     Gives information regarding the notated interval between n0 and n1
 
@@ -1233,10 +1256,10 @@ def notated_interval(n0: str, n1: str) -> Tuple[int, float]:
     return (vertpos1-vertpos0, n2m(n1)-n2m(n0))
 
 
-def enharmonic_variations(notes: Sequence[str],
-                          fixedslots:Dict[int, Optional[int]]=None,
+def enharmonic_variations(notes: list[str],
+                          fixedslots: dict[int, int|None] = None,
                           force=False
-                          ) -> List[Tuple[str]]:
+                          ) -> list[tuple[str]]:
     """
     Generates all enharmonic variations of the given notes
 
@@ -1256,12 +1279,12 @@ def enharmonic_variations(notes: Sequence[str],
     # 0 1  2  3  4 5  6  7  8 9  0 1  2  3  4 5  6  7  8 9  0  1  2 3
     non_enharmonic_slots = {0, 4, 8, 10, 14, 18, 22}
     variants_per_note = [(n, enharmonic(n)) for n in notes]
-    allvariants: List[Tuple[str]] = []
+    allvariants: list[tuple[str]] = []
     if fixedslots is None:
         fixedslots = {}
     for indexes in _itertools.product(*[(0, 1)] * len(notes)):
         # indexes contains a row of the form (0, 0, 1) for 3 notes
-        row: List[str] = []
+        row: list[str] = []
         rowslots = fixedslots.copy()
         for idx, variants in zip(indexes, variants_per_note):
             notename = variants[idx]
@@ -1495,6 +1518,21 @@ def vertical_position(note: str) -> int:
 
 
 def vertical_position_to_note(pos: int) -> str:
+    """
+    Given a vertical position as an integer, returns the corresponding (diatonic) note
+
+    Args:
+        pos: the position as index, where 0 is C
+
+    Returns:
+        the note corresponding to the given vertical position
+
+    >>> vertical_position_to_note(2)
+    0E
+    >>> vertical_position_to_note(0)
+    0C
+
+    """
     # CDEFGAB
     # 0123456
     octave = pos // 7
@@ -1563,7 +1601,7 @@ def _notated_pitch_midinote(midinote: float, divsPerSemitone=4) -> NotatedPitch:
 
 
 def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
-                ) -> Tuple[int, int]:
+                ) -> tuple[int, int]:
     """
     Find the ratio between n1 and n2
 
