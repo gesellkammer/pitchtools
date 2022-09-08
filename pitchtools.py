@@ -96,7 +96,7 @@ class NoteParts(NamedTuple):
 
     @property
     def diatonic_step(self) -> int:
-        return 'ABCDEFGAB'.index(self.diatonic_name)
+        return 'CDEFGABC'.index(self.diatonic_name)
 
 
 class ParsedMidinote(NamedTuple):
@@ -949,6 +949,7 @@ _centsrepr = {
     'b-': -150
 }
 
+
 def alteration_to_cents(alteration: str) -> int:
     """
     Convert an alteration to its corresponding cents deviation
@@ -1146,7 +1147,7 @@ def enharmonic(notename: str) -> str:
             chrom = _flats[(p.chromatic_index-1)%12]
             centstr= cents_repr(100+p.cents_deviation)
         else:
-            raise ValueError("???", p)
+            raise ValueError(f"Invalid cents deviation {p.cents_deviation} ({notename=}, {p=})")
         return f"{p.octave}{chrom}{centstr}"
     else: #  p.diatonic_alteration == -1:
         # 4Db : 4C#
@@ -1165,7 +1166,7 @@ def enharmonic(notename: str) -> str:
             chrom = _sharps[p.chromatic_index-1]
             centstr = cents_repr(100+p.cents_deviation)
         else:
-            raise ValueError("???", p)
+            raise ValueError(f"Invalid cents deviation {p.cents_deviation} ({notename=}, {p=})")
         return f"{p.octave}{chrom}{centstr}"
 
 
@@ -1244,6 +1245,8 @@ def enharmonic_variations(notes: Sequence[str],
         fixedslots: a dict of slot:alteration_direction, fixes the given slots
             to a given alteration direction (1=#, -1=b). If Slot 0 corresponds to C,
             1 to C+/Db-, 2 to C#/Db, etc.
+        force: if True, it will always return at least a variation even if there are
+            no valid solutions
 
     Returns:
         a list of enharmonic alternatives
@@ -1279,11 +1282,111 @@ def enharmonic_variations(notes: Sequence[str],
             # a valid row
             allvariants.append(tuple(row))
     out = list(set(allvariants))
-    if out:
-        return out
-    if force:
-        return [tuple(notes)]
-    return []
+    return out if out or not force else [tuple(notes)]
+
+
+_chromatic_transpositions = {
+    'C': ('C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B', 'C'),
+    'C#': ('C#', 'D', 'D#', 'E', 'E#', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C', 'C#'),
+    'Db': ('Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B', 'C', 'Db'),
+    'D': ('D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B', 'C', 'C#', 'D'),
+    'D#': ('D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#'),
+    'Eb': ('Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb'),
+    'E': ('E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B', 'C', 'C#', 'D', 'D#', 'E'),
+    'F': ('F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F'),
+    'F#': ('F#', 'G', 'G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#'),
+    'Gb': ('Gb', 'G', 'Ab', 'A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb'),
+    'G': ('G', 'Ab', 'A', 'Bb', 'B', 'C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G'),
+    'G#': ('G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'),
+    'Ab': ('Ab', 'A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab'),
+    'A': ('A', 'Bb', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A'),
+    'A#': ('A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#'),
+    'Bb': ('Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb'),
+    'B': ('B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B')
+}
+
+
+_chromatic_interval_to_diatonic_interval = {
+    0: 0,
+    1: 1,
+    2: 1,
+    3: 2,
+    4: 2,
+    5: 3,
+    6: 3,
+    7: 4,
+    8: 5,
+    9: 5,
+    10: 6,
+    11: 6,
+    12: 7
+}
+
+
+def transpose(notename: str, interval: float, white_enharmonic=True) -> str:
+    """
+    Transpose a note by an interval taking spelling into account
+
+    The main difference with just doing ``m2n(n2m(notename)+interval)`` is that
+    there the spelling of the origininal notename is just ignored. Notice that
+    as the interval is given as a float there is no means to convey
+
+    ========= ========= ===============================  ===========================
+    notename  interval  transpose                        ``m2n(n2m(name)+interval)``
+    ========= ========= ===============================  ===========================
+     4Eb      5         4Ab                              4G#
+     4D#      5         4G#                              4G#
+     4Db      2         4Eb                              4D#
+     4C#      2         4D#                              4D#
+     4Db      4.2       4F+20                            4F+20
+     4C#      4.2       4E#+20 (white_enharmonic=True)   4F+20
+    ========= ========= ===============================  ===========================
+
+    Args:
+        notename: the note
+        interval: an interval in semitones
+        white_enharmonic: if True, allow pitches like 4E# or 5Cb or any
+            microtonal variation (4E#+20). If False, such pitches are
+            replaced by their enharmonic (4F, 4B).
+
+    Returns:
+        the transposed pitch
+
+    """
+    midi1 = n2m(notename)
+    midi2 = midi1 + interval
+    octave = split_notename(m2n(midi2)).octave
+    parts1 = split_notename(notename)
+    chromatic1 = parts1.diatonic_name + parts1.alteration
+    rounded_interval = round(interval)
+    deviation = interval - rounded_interval
+    deviationcents = round(deviation * 100) + parts1.cents_deviation
+    chromatic2 = _chromatic_transpositions.get(chromatic1)[rounded_interval % 12]
+    diff = n2m(f"{octave}{chromatic2}") - n2m(notename)
+    if diff < 0 and interval > 0:
+        octave += 1
+    elif diff > 0 and interval < 0:
+        octave -= 1
+
+    letter = chromatic2[0]
+    alter = chromatic2[1] if len(chromatic2) == 2 else 0
+
+    if not white_enharmonic:
+        if letter == 'E' and alter == '#':
+            letter, alter = 'F', ''
+        elif letter == 'F' and alter == 'b':
+            letter, alter = 'E', ''
+        elif letter == 'B' and alter == '#':
+            letter, alter = 'C', ''
+            octave += 1
+        elif letter == 'C' and alter == 'b':
+            letter, alter = 'B', ''
+            octave -= 1
+
+    out = construct_notename(octave=octave, letter=letter, alter=alter, cents=deviationcents)
+    if deviationcents < -50 or deviationcents > 50:
+        out = normalize_notename(out)
+    return out
 
 
 def freq2mel(freq: float) -> float:
@@ -1297,7 +1400,7 @@ def freq2mel(freq: float) -> float:
     return 1127.01048 * math.log(1. + freq/700)
 
 
-def mel2freq(mel:float) -> float:
+def mel2freq(mel: float) -> float:
     """
     Convert a position in the mel-scale to its corresponding frequency
 
@@ -1315,22 +1418,23 @@ def mel2freq(mel:float) -> float:
     """
     return 700. * (math.exp(mel / 1127.01048) - 1.0)
 
-_centsToAccidentalName = {
-# cents   name
-    0:   'natural',
-    25:  'natural-up',
-    50:  'quarter-sharp',
-    75:  'sharp-down',
-    100: 'sharp',
-    125: 'sharp-up',
-    150: 'three-quarters-sharp',
 
-    -25: 'natural-down',
-    -50: 'quarter-flat',
-    -75: 'flat-up',
-    -100:'flat',
-    -125:'flat-down',
-    -150:'three-quarters-flat'
+_centsToAccidentalName = {
+#   cents   name
+    0:     'natural',
+    25:    'natural-up',
+    50:    'quarter-sharp',
+    75:    'sharp-down',
+    100:   'sharp',
+    125:   'sharp-up',
+    150:   'three-quarters-sharp',
+
+    -25:   'natural-down',
+    -50:   'quarter-flat',
+    -75:   'flat-up',
+    -100:  'flat',
+    -125:  'flat-down',
+    -150:  'three-quarters-flat'
 }
 
 
@@ -1345,24 +1449,26 @@ def accidental_name(alteration_cents: int, semitoneDivisions=4) -> str:
     Returns:
         the name of the corresponding accidental, as string
 
-    Names::
 
-        cents       alteration name
-        ---------------------------
-              0     natural
-             25     natural-up
-             50     quarter-sharp
-             75     sharp-down
-            100     sharp
-            125     sharp-up
-            150     three-quarters-sharp
+    ==========  ==================
+    cents       alteration name
+    ==========  ==================
+          0     natural
+         25     natural-up
+         50     quarter-sharp
+         75     sharp-down
+        100     sharp
+        125     sharp-up
+        150     three-quarters-sharp
 
-             -25    natural-down
-             -50    quarter-flat
-             -75    flat-up
-            -100    flat
-            -125    flat-down
-            -150    three-quarters-flat
+         -25    natural-down
+         -50    quarter-flat
+         -75    flat-up
+        -100    flat
+        -125    flat-down
+        -150    three-quarters-flat
+    ==========  ==================
+
     """
     assert semitoneDivisions in {1, 2, 4}, "semitoneDivisions should be 1, 2, or 4"
     centsResolution = 100 // semitoneDivisions
