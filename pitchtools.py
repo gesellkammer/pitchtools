@@ -97,6 +97,9 @@ class NoteParts:
     cents_deviation: int
     """Number of cents deviation from the chromatic pitch"""
 
+    def __iter__(self):
+        return iter((self.octave, self.diatonic_name, self.alteration, self.cents_deviation))
+
     @property
     def alteration_cents(self) -> int:
         """The cents corresponding to the alteration"""
@@ -376,17 +379,21 @@ class PitchConverter:
             the notename corresponding to midinote.
 
         """
-        octave, note, microtonal_alteration, cents = self.midi_to_note_parts(midinote)
+        noteparts = self.midi_to_note_parts(midinote)
+        diatonic_name = noteparts.diatonic_name
+        alteration = noteparts.alteration
+        cents = noteparts.cents_deviation
+        octave = noteparts.octave
         if cents == 0:
-            return str(octave)+note+microtonal_alteration
+            return str(octave)+diatonic_name+alteration
         if cents>0:
             if cents<10:
-                return f"{octave}{note}{microtonal_alteration}+0{cents}"
-            return f"{octave}{note}{microtonal_alteration}+{cents}"
+                return f"{octave}{diatonic_name}{alteration}+0{cents}"
+            return f"{octave}{diatonic_name}{alteration}+{cents}"
         else:
             if -10<cents:
-                return f"{octave}{note}{microtonal_alteration}-0{abs(cents)}"
-            return f"{octave}{note}{microtonal_alteration}{cents}"
+                return f"{octave}{diatonic_name}{alteration }-0{abs(cents)}"
+            return f"{octave}{diatonic_name}{alteration }{cents}"
 
     def n2m(self, note: str) -> float:
         """ 
@@ -514,7 +521,7 @@ class PitchConverter:
         if cents == 0:
             return NoteParts(octave, _sharps[ps], "", 0)
         elif cents == 50:
-            if ps in (1, 3, 6, 8, 10):
+            if ps in {1, 3, 6, 8, 10}:
                 return NoteParts(octave, _sharps[ps+1], "-", 0)
             return NoteParts(octave, _sharps[ps], "+", 0)
         elif cents == 25 and self.eighthnote_symbol:
@@ -525,7 +532,7 @@ class PitchConverter:
             ps += 1
             if ps>11:
                 octave += 1
-            if ps in (1, 3, 6, 8, 10):
+            if ps in {1, 3, 6, 8, 10}:
                 return NoteParts(octave, _flats[ps], "<", 0)
             else:
                 return NoteParts(octave, _sharps[ps], "<", 0)
@@ -876,7 +883,6 @@ def quantize_notename(notename: str, divisions_per_semitone) -> str:
     See Also:
         `quantize_midinote`
     """
-
     octave, letter, alter, cents = split_notename(notename)
     cents = int(round(cents/100 * divisions_per_semitone) / divisions_per_semitone * 100)
     if cents >= 100 or cents <= -100:
@@ -1026,39 +1032,52 @@ def _parse_centstr(centstr: str) -> int:
 
 
 @_cache
-def split_notename(notename: str) -> NoteParts:
+def split_notename(notename: str, default_octave=-1) -> NoteParts:
     """
-    Return (octave, letter, alteration (#, b), cents)
+    Splits a notename into octave, letter, alteration and cents
 
-    Microtonal alterations, like "+", "-", ">", "<" are resolved
-    into cents alterations
+    Args:
+        notename: the notename to split
+        default_octave: if an octave-less pitch is given (e.g. 4C#-7) this
+            value is returned as the octave. It can then be used to query if the notename
+            had an octave or not. In the default we avoid using 0 since this is a valid
+            octave
+
+    Microtonal alterations, like "+" (+50), "-" (-50), ">" (+25), "<" (-25)
+    are resolved into cents alterations
 
     =======    ===================
      Input           Output
     =======    ===================
-    4C#+10     (4, "C", "#", 10)
-    Eb4-15     (4, "E", "b", -15)
-    4C+        (4, "C", "", 50)
-    5Db<       (5, "D", "b", -25)
+    4C#+10     4, "C", "#", 10
+    Eb4-15     4, "E", "b", -15
+    4C+        4, "C", "", 50
+    5Db<       5, "D", "b", -25
     =======    ===================
     """
     if not notename[0].isdecimal():
         # C#4-10
         cursor = 1
         letter = notename[0]
+        # find alteration
         l1 = notename[1]
         if l1 == "#":
             alter = "#"
-            octave = int(notename[2])
-            cursor = 3
+            cursor = 2
         elif l1 == "b":
             alter = "b"
-            octave = int(notename[2])
-            cursor = 3
+            cursor = 2
         else:
             alter = ""
-            octave = int(notename[1])
-            cursor = 2
+            cursor = 1
+
+        octchar = notename[cursor]
+        if octchar.isdecimal():
+            octave = int(octchar)
+            cursor += 1
+        else:
+            octave = default_octave
+
         centstr = notename[cursor:]
         cents = _parse_centstr(centstr)
         if cents is None:
@@ -1451,7 +1470,6 @@ _centsToAccidentalName = {
     100:   'sharp',
     125:   'sharp-up',
     150:   'three-quarters-sharp',
-
     -25:   'natural-down',
     -50:   'quarter-flat',
     -75:   'flat-up',
