@@ -5,7 +5,7 @@ classifiers = """
 """
 
 setup(name='pitchtools',
-      version='1.7.2',
+      version='1.8.0',
       python_requires=">=3.9",
       description='Utilities to convert between midinotes, frequency and notenames', 
       long_description=open('README.rst').read(),
