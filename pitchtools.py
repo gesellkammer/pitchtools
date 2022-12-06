@@ -487,12 +487,12 @@ class PitchConverter:
         octave, chromatic_name, alteration, cents = self.midi_to_note_parts(midinote)
         if cents == 0:
             return str(octave)+chromatic_name+alteration
-        if cents>0:
-            if cents<10:
+        if cents > 0:
+            if cents < 10:
                 return f"{octave}{chromatic_name}{alteration}+0{cents}"
             return f"{octave}{chromatic_name}{alteration}+{cents}"
         else:
-            if -10<cents:
+            if -10 < cents:
                 return f"{octave}{chromatic_name}{alteration }-0{abs(cents)}"
             return f"{octave}{chromatic_name}{alteration }{cents}"
 
@@ -1770,6 +1770,22 @@ def _notated_pitch_midinote(midinote: float, divsPerSemitone=4) -> NotatedPitch:
                         diatonic_alteration=diatonicAlteration,
                         chromatic_alteration=cents/100,
                         accidental_name=accidental_name(int(diatonicAlteration*100)))
+
+
+@_cache
+def notename_upper(notename: str) -> str:
+    """
+    Convert from 4eb to 4Eb or from eb4 to Eb4
+
+    Args:
+        notename: the notename to convert
+
+    Returns:
+        the uppercase version of notename
+
+    """
+    parts = split_notename(notename)
+    return construct_notename(parts.octave, parts.diatonic_name, parts.alteration, parts.cents_deviation)
 
 
 def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
