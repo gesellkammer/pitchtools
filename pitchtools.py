@@ -101,7 +101,7 @@ _EPS = sys.float_info.epsilon
 _flats  = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B", "C"]
 _sharps = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C"]
 
-_pitch_class = {
+_pitchclass_chromatic = {
     'C': 0,
     'C#': 1,
     'Db': 1,
@@ -292,10 +292,10 @@ class NotatedPitch:
         "The midinote corresponding to this notated pitch"
         return (self.octave+1)*12 + self.chromatic_index + self.chromatic_alteration
 
-    def microtone_index(self, divs_per_semitone=2) -> int:
+    def microtone_index(self, semitone_divisions=2) -> int:
         """The index of the nearest microtone
 
-        For example, if divs_per_semitone is 2, then
+        For example, if semitone_divisions is 2, then
 
         ====   ================
         note   microtone index
@@ -309,9 +309,9 @@ class NotatedPitch:
         ====   ================
         """
         m = self.midinote
-        quantized = round(m*divs_per_semitone)/divs_per_semitone
+        quantized = round(m*semitone_divisions)/semitone_divisions
         idx = quantized%12
-        return int(idx*divs_per_semitone)
+        return int(idx*semitone_divisions)
 
     @property
     def is_white_key(self) -> bool:
@@ -1339,7 +1339,7 @@ def enharmonic(notename: str) -> str:
         return f"{p.octave}{chrom}{centstr}"
 
 
-def pitch_round(midinote: float, semitoneDivisions=4) -> tuple[str,int]:
+def pitch_round(midinote: float, semitone_divisions=4) -> tuple[str,int]:
     """
     Round midinote to the next (possibly microtonal) note
 
@@ -1348,7 +1348,7 @@ def pitch_round(midinote: float, semitoneDivisions=4) -> tuple[str,int]:
 
     Args:
         midinote: the midinote to round, as float
-        semitoneDivisions: the number of division per semitone
+        semitone_divisions: the number of division per semitone
 
     Returns:
         a tuple (rounded note, cents deviation)
@@ -1365,7 +1365,7 @@ def pitch_round(midinote: float, semitoneDivisions=4) -> tuple[str,int]:
 
     .. seealso:: :func:`quantize_midinote`
     """
-    rounding_factor = 1 / semitoneDivisions
+    rounding_factor = 1 / semitone_divisions
     rounded_midinote = round(midinote/rounding_factor)*rounding_factor
     notename = m2n(rounded_midinote)
     basename, cents = split_cents(notename)
@@ -1439,7 +1439,7 @@ def enharmonic_variations(notes: list[str],
         for idx, variants in zip(indexes, variants_per_note):
             notename = variants[idx]
             notated = notated_pitch(notename)
-            slotindex = notated.microtone_index(divs_per_semitone=2)
+            slotindex = notated.microtone_index(semitone_divisions=2)
             if slotindex in non_enharmonic_slots:
                 row.append(notename)
                 continue
@@ -1616,13 +1616,13 @@ _centsToAccidentalName = {
 }
 
 
-def accidental_name(alteration_cents: int, semitoneDivisions=4) -> str:
+def accidental_name(alteration_cents: int, semitone_divisions=4) -> str:
     """
     The name of the accidental corresponding to the given cents
 
     Args:
         alteration_cents: 100 = sharp, -50 = quarter-flat, etc.
-        semitoneDivisions: number of divisions of the semitone
+        semitone_divisions: number of divisions of the semitone
 
     Returns:
         the name of the corresponding accidental, as string
@@ -1648,8 +1648,8 @@ def accidental_name(alteration_cents: int, semitoneDivisions=4) -> str:
 
     .. seealso:: :func:`construct_notename`, :func:`split_notename`
     """
-    assert semitoneDivisions in {1, 2, 4}, "semitoneDivisions should be 1, 2, or 4"
-    centsResolution = 100 // semitoneDivisions
+    assert semitone_divisions in {1, 2, 4}, "semitone_divisions should be 1, 2, or 4"
+    centsResolution = 100 // semitone_divisions
     alteration_cents = round(alteration_cents / centsResolution) * centsResolution
     return _centsToAccidentalName[alteration_cents]
 
@@ -1658,7 +1658,6 @@ def _roundres(x:float, resolution:float) -> float:
     return round(x/resolution)*resolution
 
 
-@_cache
 def vertical_position(note: str) -> int:
     """
     Return the vertical notated position of a note
@@ -1698,13 +1697,13 @@ def vertical_position_to_note(pos: int) -> str:
     return f"{octave}{step}"
 
 
-def notated_pitch(pitch: Union[float, str], divsPerSemitone=4) -> NotatedPitch:
+def notated_pitch(pitch: Union[float, str], semitone_divisions=4) -> NotatedPitch:
     """
     Convert a note or a (fractional) midinote to a NotatedPitch
 
     Args:
         pitch: a midinote as float (60=4C), or a notename
-        divsPerSemitone: number of divisions per semitone (only relevant
+        semitone_divisions: number of divisions per semitone (only relevant
             when passing a midinote as pitch
 
     Returns:
@@ -1726,7 +1725,7 @@ def notated_pitch(pitch: Union[float, str], divsPerSemitone=4) -> NotatedPitch:
 
     """
     if isinstance(pitch, (int, float)):
-        return _notated_pitch_midinote(pitch, divsPerSemitone)
+        pitch = _roundred(pitch, 1/semitone_divisions)
     return _notated_pitch_notename(pitch)
 
 
@@ -1734,42 +1733,17 @@ def notated_pitch(pitch: Union[float, str], divsPerSemitone=4) -> NotatedPitch:
 def _notated_pitch_notename(notename: str) -> NotatedPitch:
     parts = split_notename(notename)
     diatonic_index = 'CDEFGABC'.index(parts.diatonic_name)
-    # diatonic_index = ord(parts.diatonic_name) - 67
     chromatic_note = parts.diatonic_name + parts.alteration
     cents = parts.cents_deviation
     diatonic_alteration = (alteration_to_cents(parts.alteration)+cents) / 100
     return NotatedPitch(octave=parts.octave,
                         diatonic_index=diatonic_index,
                         diatonic_name=parts.diatonic_name,
-                        chromatic_index=_pitch_class[chromatic_note],
+                        chromatic_index=_pitchclass_chromatic[chromatic_note],
                         chromatic_name=chromatic_note,
                         diatonic_alteration=diatonic_alteration,
                         chromatic_alteration=cents/100,
                         accidental_name=accidental_name(int(diatonic_alteration*100)))
-
-
-@_cache
-def _notated_pitch_midinote(midinote: float, divsPerSemitone=4) -> NotatedPitch:
-    rounded_midinote = _roundres(midinote, 1/divsPerSemitone)
-    parsed_midinote = _parse_midinote(rounded_midinote)
-    notename = m2n(rounded_midinote)
-    octave, letter, alter, cents = split_notename(notename)
-    basename, cents = split_cents(notename)
-    chromaticStep = letter + alter
-    diatonicAlteration = (alteration_to_cents(alter)+cents) / 100
-    try:
-        diatonic_index = "CDEFGAB".index(letter)
-    except ValueError:
-        raise ValueError(f"note step is not diatonic: {letter}")
-
-    return NotatedPitch(octave=octave,
-                        diatonic_index=diatonic_index,
-                        diatonic_name=letter,
-                        chromatic_index=parsed_midinote.pitchindex,
-                        chromatic_name=chromaticStep,
-                        diatonic_alteration=diatonicAlteration,
-                        chromatic_alteration=cents/100,
-                        accidental_name=accidental_name(int(diatonicAlteration*100)))
 
 
 @_cache
@@ -1786,6 +1760,33 @@ def notename_upper(notename: str) -> str:
     """
     parts = split_notename(notename)
     return construct_notename(parts.octave, parts.diatonic_name, parts.alteration, parts.cents_deviation)
+
+
+def pitchclass(notename: str, semitone_divisions=1) -> int:
+    """
+    Returns the pitchclass of a given note, rounded to the nearest semitone division
+
+    This index is independent of the pitche's octave.
+    For chromatic resolotion (semitone_divisions=1), 4C has a pitchclass of 0
+    (the same as any other C), 4C# and 4Db have a pitchclass of 1, 4D a pitchclass
+    of 2, etc. If semitone_divisions is 2, then 4C has still a pitchclass of ß but
+    4C# would have a pitchclass of 2, while 4C+ and 4Db- would result in a pitchclass
+    of 1. Enharmonic pitches (4C# and 4Db) result in the same pitchclass.
+
+    Args:
+        notename: the pitch as notename
+        semitone_divisions: the number of divisions per semitone
+            (1=chromatic, 2=quarter tones, ...)
+
+    Returns:
+        the pitch-class index.
+
+
+    """
+    notated = notated_pitch(notename)
+    if semitone_divisions == 1:
+        notated.chromatic_index
+    return notated.microtone_index(semitone_divisions=semitone_divisions)
 
 
 def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
