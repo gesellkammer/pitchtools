@@ -443,19 +443,20 @@ class PitchConverter:
             return 0
         return 12.0*math.log(freq/self.a4, 2)+69.0
 
-    def freq_round(self, freq:float) -> float:
+    def freq_round(self, freq: float, semitone_divisions=1) -> float:
         """
-        Round the freq. to the nearest midinote
+        Round the freq. to the nearest semitone or fraction thereof
 
         Args:
             freq: the freq. to round
+            semitone_divisions: the number of divisions per semitone
 
         Returns:
             the rounded frequency
 
         .. seealso::  :func:`pitch_round`, :func:`quantize_notename`
         """
-        return self.m2f(round(self.f2m(freq)))
+        return self.m2f(round(self.f2m(freq) * semitone_divisions) / semitone_divisions)
 
     def m2f(self, midinote: float) -> float:
         """
@@ -1339,19 +1340,20 @@ def enharmonic(notename: str) -> str:
         return f"{p.octave}{chrom}{centstr}"
 
 
-def pitch_round(midinote: float, semitone_divisions=4) -> tuple[str,int]:
+def pitch_round(midinote: float, semitone_divisions=1) -> tuple[str, int]:
     """
     Round midinote to the next (possibly microtonal) note
 
     Returns the rounded notename and the cents deviation
-    from the original pitch to the next semitone
+    from the original pitch to the nearest semitone
 
     Args:
         midinote: the midinote to round, as float
         semitone_divisions: the number of division per semitone
 
     Returns:
-        a tuple (rounded note, cents deviation)
+        a tuple (rounded note, cents deviation). NB: the cents deviation can
+        be negative (see example below)
 
     Example
     =======
