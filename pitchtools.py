@@ -1010,7 +1010,11 @@ def quantize_notename(notename: str, divisions_per_semitone) -> str:
     return construct_notename(octave, letter, alter, cents)
 
 
-def construct_notename(octave:int, letter:str, alter:Union[int, str], cents:int,
+def construct_notename(octave: int,
+                       letter: str,
+                       alter: int | str,
+                       cents: int,
+                       freqdev: int = 0,
                        normalize=False) -> str:
     """
     Utility function to construct a valid notename
@@ -1051,6 +1055,9 @@ def construct_notename(octave:int, letter:str, alter:Union[int, str], cents:int,
     notename = f"{octave}{letter.upper()}{alterstr}{centsstr}"
     if normalize:
         notename = normalize_notename(notename)
+    if freqdev:
+        sign = '+' if freqdev > 0 else '-'
+        notename += f'{sign}{abs(freqdev)}'
     return notename
 
 
@@ -1155,6 +1162,28 @@ def _parse_centstr(centstr: str) -> int:
     return cents
 
 
+def _parse_deviation(deviation: str) -> tuple[int, int]:
+    """
+    Splits a string of the form +10-30hz or -10hz or +20+1hz
+
+    Args:
+        deviation:
+
+    Returns:
+        a tuple (centsdeviation, freqdeviation)
+    """
+    if deviation.endswith('hz'):
+        match = _re.match(r"([-+]\d+)?([-+]\d+)hz", deviation)
+        if not match:
+            raise ValueError(f"Could not parse deviation '{deviation}'")
+        centstr = match.group(1)
+        cents = int(centstr) if centstr else 0
+        freq = int(match.group(2))
+        return cents, freq
+    else:
+        return _parse_centstr(deviation), 0
+
+
 @_cache
 def split_notename(notename: str, default_octave=-1) -> NoteParts:
     """
@@ -1168,7 +1197,8 @@ def split_notename(notename: str, default_octave=-1) -> NoteParts:
             octave
 
     Microtonal alterations, like "+" (+50), "-" (-50), ">" (+25), "<" (-25)
-    are resolved into cents alterations
+    are resolved into cents alterations. Hertz deviations (for example '4C+15hz') are not supported
+    here
 
     =======    ===================
      Input           Output
@@ -1181,22 +1211,24 @@ def split_notename(notename: str, default_octave=-1) -> NoteParts:
 
     .. seealso:: :func:`notated_pitch`, :func:`construct_notename`
     """
+    if notename.endswith('hz'):
+        raise ValueError(f'Pitches with a frequency deviation are not supported '
+                         f'in this context, got "{notename}"')
+
+    if len(notename) <= 1:
+        raise ValueError(f"A note consists of at least an octave and a pitchclass, got '{notename}'")
+
     if not notename[0].isdecimal():
         # C#4-10
-        cursor = 1
         letter = notename[0]
         # find alteration
         l1 = notename[1]
-        if l1 == "#":
-            alter = "#"
-            cursor = 2
-        elif l1 == "b":
-            alter = "b"
+        if l1 == "#" or l1 == 'b':
+            alter = l1
             cursor = 2
         else:
             alter = ""
             cursor = 1
-
         octchar = notename[cursor]
         if octchar.isdecimal():
             octave = int(octchar)
@@ -1204,27 +1236,26 @@ def split_notename(notename: str, default_octave=-1) -> NoteParts:
         else:
             octave = default_octave
 
-        centstr = notename[cursor:]
-        cents = _parse_centstr(centstr)
+        deviation = notename[cursor:]
+        cents = _parse_centstr(deviation)
         if cents is None:
-            raise ValueError(f"Could not parse cents '{centstr}' while parsing note '{notename}'")
+            raise ValueError(f"Could not parse cents '{deviation}' while parsing note '{notename}'")
     else:
         # 4C#-10
         octave = int(notename[0])
         letter = notename[1]
-        rest = notename[2:]
-        cents = 0
-        alter = ""
-        if rest:
+        if len(notename) == 2:
+            cents = 0
+            alter = ""
+        else:
+            rest = notename[2:]
             r0 = rest[0]
-            if r0 == "b":
-                alter = "b"
-                centstr = rest[1:]
-            elif r0 == "#":
-                alter = "#"
+            if r0 == 'b' or r0 == '#':
+                alter = r0
                 centstr = rest[1:]
             else:
                 centstr = rest
+                alter = ''
             cents = _parse_centstr(centstr)
             if cents is None:
                 raise ValueError(f"Could not parse cents '{centstr}' while parsing note '{notename}'")
@@ -1235,7 +1266,8 @@ def split_cents(notename: str) -> tuple[str, int]:
     """
     Split a notename into the chromatic note and the cents deviation.
 
-    The cents deviation can be a negative or possitive integer
+    The cents deviation can be a negative or possitive integer or an abbreviation
+    ('+', '-', '>', '<')
 
     Args:
         notename: the notename to split
@@ -1261,7 +1293,7 @@ def enharmonic(notename: str) -> str:
     """
     Returns the enharmonic variant of notename
 
-    For simplicity we considere a possible enharmonic variant a note
+    For simplicity, we considere a possible enharmonic variant a note
     with the same sounding pitch and an alteration smaller than 150
     cents from the note without any alteration (no double sharps or
     flats). Also not accepted are enharmonics like Fb or E#
@@ -1727,7 +1759,7 @@ def notated_pitch(pitch: Union[float, str], semitone_divisions=4) -> NotatedPitc
 
     """
     if isinstance(pitch, (int, float)):
-        pitch = _roundred(pitch, 1/semitone_divisions)
+        pitch = _roundres(pitch, 1/semitone_divisions)
     return _notated_pitch_notename(pitch)
 
 
@@ -1763,6 +1795,32 @@ def notename_upper(notename: str) -> str:
     parts = split_notename(notename)
     return construct_notename(parts.octave, parts.diatonic_name, parts.alteration, parts.cents_deviation)
 
+
+def split_frequency_deviation(pitch: str) -> tuple[str, int]:
+    """
+    For a pitch given as 4Eb-14hz, returns `('4Eb', -14)`
+
+    Args:
+        pitch: the pitch as string
+
+    Returns:
+        a tuple (notename, frequency_deviation)
+
+    """
+    if not pitch.endswith('hz'):
+        return s, 0
+    parts = _re.split(r'([-+])', pitch)
+    if parts[-1].endswith('hz'):
+        freqdev = int(parts[-1][:-2])
+        if len(parts) == 1:
+            # Pure frequency, like '442hz'
+            return '', freqdev
+        if parts[-2] == '-':
+            freqdev = -freqdev
+        notename = ''.join(parts[:-2])
+        return notename, freqdev
+    else:
+        return pitch, 0
 
 def pitchclass(notename: str, semitone_divisions=1) -> int:
     """
