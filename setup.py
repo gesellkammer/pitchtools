@@ -12,7 +12,8 @@ setup(name='pitchtools',
       classifiers=list(filter(None, classifiers.split('\n'))),
       author='Eduardo Moguillansky',
       author_email='eduardo.moguillansky@gmail.com',
-      py_modules=['pitchtools'],
+      packages=['pitchtools'],
+      package_data={'pitchtools': ['py.typed']},
       url="https://github.com/gesellkammer/pitchtools"
 )
 
