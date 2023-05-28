@@ -84,7 +84,6 @@ Example
 """
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass as _dataclass
 import math
 import sys
@@ -277,7 +276,7 @@ class NotatedPitch:
 
     @property
     def fullname(self) -> str:
-        "The full name of this notated pitch"
+        """The full name of this notated pitch"""
         return f"{self.octave}{self.chromatic_name}{self.cents_str}"
 
     @property
@@ -289,7 +288,7 @@ class NotatedPitch:
 
     @property
     def midinote(self) -> float:
-        "The midinote corresponding to this notated pitch"
+        """The midinote corresponding to this notated pitch"""
         return (self.octave+1)*12 + self.chromatic_index + self.chromatic_alteration
 
     def microtone_index(self, semitone_divisions=2) -> int:
@@ -315,7 +314,7 @@ class NotatedPitch:
 
     @property
     def is_white_key(self) -> bool:
-        "Is this a white key?"
+        """Is this a white key?"""
         return self.chromatic_index not in _black_key_indexes
 
     @property
@@ -330,7 +329,7 @@ class NotatedPitch:
 
     @property
     def cents_sign(self) -> str:
-        "The sign of the cents deviation ('', '+', '-')"
+        """The sign of the cents deviation ('', '+', '-')"""
         if self.chromatic_alteration == 0:
             return ''
         elif self.chromatic_alteration > 0:
@@ -340,7 +339,7 @@ class NotatedPitch:
 
     @property
     def cents_str(self) -> str:
-        "The cents deviation as a string"
+        """The cents deviation as a string"""
         cents = self.cents_deviation
         if cents == 0:
             return ''
@@ -399,6 +398,10 @@ class PitchConverter:
         >>> cnv.f2n(440)
         '4A+20'
     """
+    default: PitchConverter | None = None
+    """Default pitch converter"""
+
+    __slots__ = ('a4', 'eighthnote_symbol')
 
     def __init__(self, a4=442.0, eightnote_symbol=True):
         self.a4 = a4
@@ -1026,8 +1029,8 @@ def construct_notename(octave: int,
             possible. `alter` should not be microtonal, any microtonal
             deviation must be set via the `cents` param)
         cents: cents deviation from chromatic pitch
-        normalize: if True, normalize/check the resulting notename (see
-        `normalize_notename`)
+        normalize: if True, normalize/check the resulting notename (see :func:`normalize_notename`)
+        freqdev: frequency deviation from the given pitch (in Hz)
 
     Returns:
         the notename
@@ -1573,7 +1576,7 @@ def transpose(notename: str, interval: float, white_enharmonic=True) -> str:
     deviationcents = round(deviation * 100) + parts1.cents_deviation
     chromatic2 = _chromatic_transpositions.get(chromatic1)[rounded_interval % 12]
     diff = n2m(f"{octave}{chromatic2}") - n2m(notename)
-    if diff < 0 and interval > 0:
+    if diff < 0 < interval:
         octave += 1
     elif diff > 0 and interval < 0:
         octave -= 1
@@ -1808,7 +1811,8 @@ def split_frequency_deviation(pitch: str) -> tuple[str, int]:
 
     """
     if not pitch.endswith('hz'):
-        return s, 0
+        return pitch, 0
+
     parts = _re.split(r'([-+])', pitch)
     if parts[-1].endswith('hz'):
         freqdev = int(parts[-1][:-2])
@@ -1845,7 +1849,7 @@ def pitchclass(notename: str, semitone_divisions=1) -> int:
     """
     notated = notated_pitch(notename)
     if semitone_divisions == 1:
-        notated.chromatic_index
+        return notated.chromatic_index
     return notated.microtone_index(semitone_divisions=semitone_divisions)
 
 
@@ -1892,19 +1896,21 @@ def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
 
 # --- Global functions ---
 
-_converter = PitchConverter()
-midi_to_note_parts = _converter.midi_to_note_parts
-set_reference_freq = _converter.set_reference_freq
-get_reference_freq = _converter.get_reference_freq
-f2m = _converter.f2m
-m2f = _converter.m2f
-m2n = _converter.m2n
-n2f = _converter.n2f
-f2n = _converter.f2n
-freq_round = _converter.freq_round
-normalize_notename = _converter.normalize_notename
-str2midi = _converter.str2midi
-as_midinotes = _converter.as_midinotes
+defaultPitchConverter = PitchConverter.default or PitchConverter()
+"""The default pitch converter"""
+
+midi_to_note_parts = defaultPitchConverter.midi_to_note_parts
+set_reference_freq = defaultPitchConverter.set_reference_freq
+get_reference_freq = defaultPitchConverter.get_reference_freq
+f2m = defaultPitchConverter.f2m
+m2f = defaultPitchConverter.m2f
+m2n = defaultPitchConverter.m2n
+n2f = defaultPitchConverter.n2f
+f2n = defaultPitchConverter.f2n
+freq_round = defaultPitchConverter.freq_round
+normalize_notename = defaultPitchConverter.normalize_notename
+str2midi = defaultPitchConverter.str2midi
+as_midinotes = defaultPitchConverter.as_midinotes
 
 
 # --- Amplitude converters ---
