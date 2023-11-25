@@ -1444,7 +1444,7 @@ def notated_interval(n0: str, n1: str) -> tuple[int, float]:
 def enharmonic_variations(notes: list[str],
                           fixedslots: dict[int, int|None] = None,
                           force=False
-                          ) -> list[tuple[str]]:
+                          ) -> list[tuple[str, ...]]:
     """
     Generates all enharmonic variations of the given notes
 
@@ -1466,7 +1466,7 @@ def enharmonic_variations(notes: list[str],
     # 0 1  2  3  4 5  6  7  8 9  0 1  2  3  4 5  6  7  8 9  0  1  2 3
     non_enharmonic_slots = {0, 4, 8, 10, 14, 18, 22}
     variants_per_note = [(n, enharmonic(n)) for n in notes]
-    allvariants: list[tuple[str]] = []
+    allvariants: list[tuple[str, ...]] = []
     if fixedslots is None:
         fixedslots = {}
     for indexes in _itertools.product(*[(0, 1)] * len(notes)):
