@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pitchtools"
-version = "1.11.2"
+version = "1.12.0"
 description = "Utilities to work with pitches, convert between midinotes, frequency and notenames"
 authors = [
   { name = "Eduardo Moguillansky", email = "eduardo.moguillansky@gmail.com" },

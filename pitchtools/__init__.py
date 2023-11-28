@@ -398,7 +398,7 @@ class PitchConverter:
         >>> cnv.f2n(440)
         '4A+20'
     """
-    default: PitchConverter | None = None
+    _default: PitchConverter | None = None
     """Default pitch converter"""
 
     __slots__ = ('a4', 'eighthnote_symbol')
@@ -406,6 +406,21 @@ class PitchConverter:
     def __init__(self, a4=442.0, eightnote_symbol=True):
         self.a4 = a4
         self.eighthnote_symbol = eightnote_symbol
+
+    def __repr__(self):
+        return f"PitchConverter(a4={self.a4})"
+
+    @classmethod
+    def default(cls) -> PitchConverter:
+        """
+        Get the default PitchConverter
+        Returns:
+
+        """
+        if PitchConverter._default is None:
+            PitchConverter._default = PitchConverter()
+        assert PitchConverter._default is not None
+        return PitchConverter._default
 
     def set_reference_freq(self, a4:float) -> None:
         """
@@ -1896,21 +1911,21 @@ def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
 
 # --- Global functions ---
 
-defaultPitchConverter = PitchConverter.default or PitchConverter()
+_default_converter = PitchConverter.default()
 """The default pitch converter"""
 
-midi_to_note_parts = defaultPitchConverter.midi_to_note_parts
-set_reference_freq = defaultPitchConverter.set_reference_freq
-get_reference_freq = defaultPitchConverter.get_reference_freq
-f2m = defaultPitchConverter.f2m
-m2f = defaultPitchConverter.m2f
-m2n = defaultPitchConverter.m2n
-n2f = defaultPitchConverter.n2f
-f2n = defaultPitchConverter.f2n
-freq_round = defaultPitchConverter.freq_round
-normalize_notename = defaultPitchConverter.normalize_notename
-str2midi = defaultPitchConverter.str2midi
-as_midinotes = defaultPitchConverter.as_midinotes
+midi_to_note_parts = _default_converter.midi_to_note_parts
+set_reference_freq = _default_converter.set_reference_freq
+get_reference_freq = _default_converter.get_reference_freq
+f2m = _default_converter.f2m
+m2f = _default_converter.m2f
+m2n = _default_converter.m2n
+n2f = _default_converter.n2f
+f2n = _default_converter.f2n
+freq_round = _default_converter.freq_round
+normalize_notename = _default_converter.normalize_notename
+str2midi = _default_converter.str2midi
+as_midinotes = _default_converter.as_midinotes
 
 
 # --- Amplitude converters ---
