@@ -791,6 +791,9 @@ def n2m(note: str) -> float:
     if not isinstance(note, str):
         raise TypeError(f"expected a str, got {note} of type {type(note)}")
 
+    if len(note) < 2:
+        raise ValueError(f"Cannot convert '{note}' to a midi note")
+        
     if note[0].isalpha():
         m = _r1.search(note)
     else:
