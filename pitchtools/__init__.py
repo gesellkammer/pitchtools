@@ -102,6 +102,11 @@ _EPS = sys.float_info.epsilon
 _flats = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B", "C"]
 _sharps = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C"]
 
+_unicode_flats = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B", "C"]
+_unicode_sharps = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B", "C"]
+
+
+
 _pitchclass_chromatic = {
     'C': 0,
     'C#': 1,
@@ -304,7 +309,7 @@ class NotatedPitch:
     @property
     def vertical_position(self) -> int:
         """
-        Abstract value indicating the vertical notated position 
+        Abstract value indicating the vertical notated position
         """
         return self.octave * 7 + self.diatonic_index
 
@@ -410,6 +415,7 @@ class PitchConverter:
             (">", "<") when a note is exactly 25 cents higher
             or lower (for example, "4C>"). Otherwise, a notename
             would be, for example, "4C+25"
+        unicode_accidentals: use unicode symbols for accidentals
 
     Example
     ~~~~~~~
@@ -423,11 +429,12 @@ class PitchConverter:
     _default: PitchConverter | None = None
     """Default pitch converter"""
 
-    __slots__ = ('a4', 'eighthnote_symbol')
+    __slots__ = ('a4', 'eighthnote_symbol', 'unicode_accidentals')
 
-    def __init__(self, a4=442.0, eightnote_symbol=True):
+    def __init__(self, a4=442.0, eightnote_symbol=True, unicode_accidentals=False):
         self.a4 = a4
         self.eighthnote_symbol = eightnote_symbol
+        self.unicode_accidentals = unicode_accidentals
 
     def __repr__(self):
         return f"PitchConverter(a4={self.a4})"
@@ -538,8 +545,8 @@ class PitchConverter:
             return f"{octave}{chromatic_name}{alteration}{cents}"
 
     def n2m(self, note: str) -> float:
-        """ 
-        Convert a notename to a midinote 
+        """
+        Convert a notename to a midinote
 
         Args:
             note: the notename
@@ -556,8 +563,8 @@ class PitchConverter:
         return self.m2f(n2m(note))
 
     def f2n(self, freq: float) -> str:
-        """ 
-        Return the notename corresponding to the given freq 
+        """
+        Return the notename corresponding to the given freq
 
         Args:
             freq: the freq. to convert
@@ -585,8 +592,8 @@ class PitchConverter:
         return freqs
 
     def asmidi(self, x: int | float | str) -> float:
-        """ 
-        Convert x to a midinote 
+        """
+        Convert x to a midinote
 
         Args:
             x: an object which can be converted to a midinote (a freq., a notename)
@@ -673,35 +680,39 @@ class PitchConverter:
         octave = int(midinote / 12.0) - 1
         ps = int(midinote % 12)
         cents = int(micro * 100 + 0.5)
+        sharps = _sharps if not self.unicode_accidentals else _unicode_sharps
+        flats = _flats if not self.unicode_accidentals else _unicode_flats
         if cents == 0:
-            return (octave, _sharps[ps], "", 0)
+            return (octave, sharps[ps], "", 0)
         elif cents == 50:
             if ps in {1, 3, 6, 8, 10}:
-                return (octave, _sharps[ps + 1], "-", 0)
-            return (octave, _sharps[ps], "+", 0)
+                return (octave, sharps[ps + 1], "-", 0)
+            return (octave, sharps[ps], "+", 0)
         elif cents == 25 and self.eighthnote_symbol:
+            symbol = ">" if not self.unicode_accidentals else "↑"
             if ps in (6, 10,):
-                return (octave, _flats[ps], ">", 0)
-            return (octave, _sharps[ps], ">", 0)
+                return (octave, flats[ps], symbol, 0)
+            return (octave, sharps[ps], symbol, 0)
         elif cents == 75 and self.eighthnote_symbol:
             ps += 1
             if ps > 11:
                 octave += 1
+            symbol = "<" if not self.unicode_accidentals else "↓"
             if ps in {1, 3, 6, 8, 10}:
-                return (octave, _flats[ps], "<", 0)
+                return (octave, flats[ps], symbol, 0)
             else:
-                return (octave, _sharps[ps], "<", 0)
+                return (octave, sharps[ps], symbol, 0)
         elif cents > 50:
             cents = 100 - cents
             ps += 1
             if ps > 11:
                 octave += 1
-            return (octave, _flats[ps], "", -cents)
+            return (octave, flats[ps], "", -cents)
         else:
-            return (octave, _sharps[ps], "", cents)
+            return (octave, sharps[ps], "", cents)
 
     def normalize_notename(self, notename: str) -> str:
-        """ 
+        """
         Convert notename to its canonical form
 
         The canonical form follows the scheme ``octave:pitchclass:microtone``
@@ -812,9 +823,9 @@ def n2m(note: str) -> float:
     """
     oct, pch, alt, cents = _split_notename(note)
     pc = _notes2[pch]
-    if alt == '#':
+    if alt == '#' or alt == '♯':
         pc += 1
-    elif alt == "b":
+    elif alt == "b" or alt == '♭':
         pc -= 1
     return (oct + 1) * 12 + pc + cents/100.
 
@@ -974,7 +985,7 @@ def _parse_midinote(midinote: float) -> _ParsedMidinote:
         midinote: the midinote, where 60 corresponds to central C (C4)
 
     Returns:
-        a ParsedMidinote, which is a NamedTuple with fields pitchindex (int), 
+        a ParsedMidinote, which is a NamedTuple with fields pitchindex (int),
         deviation (in semitones, float), octave (int) and chromaticPitch (str)
 
     ======    =========
@@ -1008,7 +1019,7 @@ def _parse_midinote(midinote: float) -> _ParsedMidinote:
 def ratio2interval(ratio: float) -> float:
     """
     Convert the ratio between 2 freqs. to their interval in semitones
-    
+
     Args:
         ratio: a ratio between two frequencies
 
@@ -1017,12 +1028,12 @@ def ratio2interval(ratio: float) -> float:
 
     Example
     =======
-    
+
     .. code::
-    
+
         >>> f1 = n2f("C4")
         >>> f2 = n2f("D4")
-        >>> ratio2interval(f2/f1)   
+        >>> ratio2interval(f2/f1)
         2
 
     .. seealso:: :func:`interval2ratio`, :func:`r2i`, :func:`i2r`
@@ -1048,7 +1059,7 @@ def interval2ratio(interval: float) -> float:
 
         >>> f1 = n2f("C4")
         >>> r = interval2ratio(7)  # a 5th higher
-        >>> f2n(f1*r)  
+        >>> f2n(f1*r)
         4G
 
     .. seealso:: :func:`ratio2interval`, :func:`r2i`, :func:`i2r`
@@ -1084,13 +1095,13 @@ def quantize_midinote(midinote: float, divisions_per_semitone, method="round"
     raise ValueError(f"method should be either 'round' or 'floor', got {method}")
 
 
-def quantize_notename(notename: str, divisions_per_semitone) -> str:
+def quantize_notename(notename: str, divisions_per_semitone: int) -> str:
     """
     Quantize notename to the next semitone divisions
 
     Args:
         notename: the notename to quantize
-        divisions_per_semitone: the number of divisions of the semitone 
+        divisions_per_semitone: the number of divisions of the semitone
             (1 to quantize to nearest chromatic note)
 
     Returns:
@@ -1107,12 +1118,13 @@ def quantize_notename(notename: str, divisions_per_semitone) -> str:
 
     .. seealso:: :func:`quantize_midinote`
     """
-    octave, letter, alter, cents = split_notename(notename)
-    cents = int(round(cents / 100 * divisions_per_semitone) / divisions_per_semitone * 100)
+    parts = split_notename(notename)
+    cents = int(round(parts.cents_deviation / 100 * divisions_per_semitone) / divisions_per_semitone * 100)
     if cents >= 100 or cents <= -100:
         notename = m2n(round(n2m(notename) * divisions_per_semitone) / divisions_per_semitone)
-        octave, letter, alter, cents = split_notename(notename)
-    return construct_notename(octave, letter, alter, cents)
+        parts = split_notename(notename)
+        cents = parts.cents_deviation
+    return construct_notename(parts.octave, parts.diatonic_name, parts.alteration, cents)
 
 
 def construct_notename(octave: int,
@@ -1211,7 +1223,21 @@ _centsrepr = {
     'b>': -75,
     'b': -100,
     'b<': -125,
-    'b-': -150
+    'b-': -150,
+
+    '♯+': 150,
+    '♯↑': 125,
+    '♯': 100,
+    '♯↓': 75,
+    '+': 50,
+    '↑': 25,
+    '': 0,
+    '↓': -25,
+    '-': -50,
+    '♭↑': -75,
+    '♭': -100,
+    '♭↓': -125,
+    '♭-': -150
 }
 
 
@@ -1225,23 +1251,23 @@ def alteration_to_cents(alteration: str) -> int:
     Returns:
         the alteration in cents
 
-    =============  =======
-     Alternation    Cents
-    =============  =======
-        #+          150
-        #>          125
-        #           100
-        #<          75
-        \+          50
-        >           25
-        <           -25
-        \-          -50
-        b>          -75
-        b           -100
-        b<          -125
-        b-          -150
-    =============  =======
-    
+    =============  ==========
+     Alternation     Cents
+    =============  ==========
+        ``#+``          150
+        ``#>``          125
+        ``# ``          100
+        ``#<``          75
+        ``+ ``          50
+        ``> ``          25
+        ``< ``         -25
+        ``- ``         -50
+        ``b>``         -75
+        ``b ``         -100
+        ``b<``         -125
+        ``b-``         -150
+    =============  ==========
+
 
     """
     cents = _centsrepr.get(alteration)
@@ -1329,7 +1355,7 @@ def split_notename(notename: str) -> NoteParts:
     return NoteParts(*_split_notename(notename))
 
 
-def _split_notename(notename: str) -> tuple[int, str, str, float]:
+def _split_notename(notename: str) -> tuple[int, str, str, int]:
     """
     Splits a notename into octave, letter, alteration and cents
 
@@ -1552,7 +1578,7 @@ def pitch_round(midinote: float, semitone_divisions=1) -> tuple[str, int]:
     =======
 
     .. code::
-        
+
         >>> pitch_round(60.1)
         ("4C", 10)
         >>> pitch_round(60.75)
@@ -1600,7 +1626,7 @@ def notated_interval(n0: str, n1: str) -> tuple[int, float]:
 
 
 def enharmonic_variations(notes: list[str],
-                          fixedslots: dict[int, int | None] = None,
+                          fixedslots: dict[int, int | None] | None = None,
                           force=False
                           ) -> list[tuple[str, ...]]:
     """
@@ -1731,7 +1757,7 @@ def transpose(notename: str, interval: float, white_enharmonic=True) -> str:
     rounded_interval = round(interval)
     deviation = interval - rounded_interval
     deviationcents = round(deviation * 100) + parts1.cents_deviation
-    chromatic2 = _chromatic_transpositions.get(chromatic1)[rounded_interval % 12]
+    chromatic2 = _chromatic_transpositions[chromatic1][rounded_interval % 12]
     diff = n2m(f"{octave}{chromatic2}") - n2m(notename)
     if diff < 0 < interval:
         octave += 1
@@ -2042,7 +2068,7 @@ def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
     ======  =======   =====
 
     .. seealso:: :func:`ratio2interval`
-    
+
     """
     f1 = n2f(n1) if isinstance(n1, str) else m2f(n1)
     f2 = n2f(n2) if isinstance(n2, str) else m2f(n2)
@@ -2093,7 +2119,7 @@ def amp2db(amp: float) -> float:
     Args:
         amp: the amplitude between 0 and 1
 
-    Returns: 
+    Returns:
         the corresponding amplitude in dB
 
     .. seealso:: :func:`db2amp`
