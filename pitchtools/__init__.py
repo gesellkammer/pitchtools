@@ -1626,7 +1626,7 @@ def notated_interval(n0: str, n1: str) -> tuple[int, float]:
 
 
 def enharmonic_variations(notes: list[str],
-                          fixedslots: dict[int, int | None] | None = None,
+                          fixedslots: dict[int, int] | None = None,
                           force=False
                           ) -> list[tuple[str, ...]]:
     """
@@ -1675,7 +1675,7 @@ def enharmonic_variations(notes: list[str],
         if len(row) == len(notes):
             # a valid row
             allvariants.append(tuple(row))
-    out = list(set(allvariants))
+    out = list(set(allvariants))^
     return out if out or not force else [tuple(notes)]
 
 
