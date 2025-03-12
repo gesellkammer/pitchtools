@@ -1675,7 +1675,7 @@ def enharmonic_variations(notes: list[str],
         if len(row) == len(notes):
             # a valid row
             allvariants.append(tuple(row))
-    out = list(set(allvariants))^
+    out = list(set(allvariants))
     return out if out or not force else [tuple(notes)]
 
 
