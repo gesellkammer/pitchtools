@@ -1249,11 +1249,8 @@ _centsrepr = {
     '♯↑': 125,
     '♯': 100,
     '♯↓': 75,
-    '+': 50,
     '↑': 25,
-    '': 0,
     '↓': -25,
-    '-': -50,
     '♭↑': -75,
     '♭': -100,
     '♭↓': -125,
@@ -1297,18 +1294,16 @@ def alteration_to_cents(alteration: str) -> int:
     return cents
 
 
-def _asint(x):
+def _int_or_none(s: str) -> int | None:
     try:
-        return int(x)
+        return int(s)
     except ValueError:
         return None
 
 
-def _parse_centstr(centstr: str) -> int:
+def _parse_centstr(centstr: str) -> int | None:
     cents = _centsrepr.get(centstr)
-    if cents is None:
-        cents = _asint(centstr)
-    return cents
+    return cents if cents is not None else _int_or_none(centstr)
 
 
 def _parse_deviation(deviation: str) -> tuple[int, int]:
@@ -1330,7 +1325,10 @@ def _parse_deviation(deviation: str) -> tuple[int, int]:
         freq = int(match.group(2))
         return cents, freq
     else:
-        return _parse_centstr(deviation), 0
+        cents = _parse_centstr(deviation)
+        if cents is None:
+            raise ValueError(f"Could not parse deviation {deviation}")
+        return cents, 0
 
 
 def _split_notename_regex(notename: str) -> NoteParts:
@@ -1346,6 +1344,8 @@ def _split_notename_regex(notename: str) -> NoteParts:
     else:
         letter, alter = pitch, ''
     cents = _parse_centstr(centstr)
+    if cents is None:
+        raise ValueError(f"Could not parse cents {centstr} while parsing {notename}")
     return NoteParts(int(octave), letter, alter, cents)
 
 
