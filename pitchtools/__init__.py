@@ -106,6 +106,23 @@ _unicode_flats = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", 
 _unicode_sharps = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B", "C"]
 
 
+_enharmonic_pitchclass = {
+    "Cb": ("B", -1),
+    "C#": ("Db", 0),
+    "Db": ("C#", 0),
+    "D#": ("Eb", 0),
+    "Eb": ("D#", 0),
+    "E#": ("F", 0),
+    "Fb": ("E", 0),
+    "F#": ("Gb", 0),
+    "Gb": ("F#", 0),
+    "G#": ("Ab", 0),
+    "Ab": ("G#", 0),
+    "A#": ("Bb", 0),
+    "Bb": ("A#", 0),
+    "B#": ("C", 1),
+}
+
 
 _pitchclass_chromatic = {
     'C': 0,
@@ -1128,7 +1145,7 @@ def quantize_notename(notename: str, divisions_per_semitone: int) -> str:
 
 
 def construct_notename(octave: int,
-                       letter: str,
+                       letter: str | int,
                        alter: int | str,
                        cents: int,
                        freqdev: int = 0,
@@ -1138,7 +1155,8 @@ def construct_notename(octave: int,
 
     Args:
         octave: the octave of the notename (4 = central octave)
-        letter: the pitch letter, one of "a", "b", "c", ... (case is not important)
+        letter: the pitch letter, one of "a", "b", "c", ... (case is not important). Can also
+            be an int, where 0=C, 1=D, ...
         alter: 1 for sharp, -1 for flat, 0 for natural. An alteration as str is also
             possible. `alter` should not be microtonal, any microtonal
             deviation must be set via the `cents` param)
@@ -1159,6 +1177,8 @@ def construct_notename(octave: int,
 
     .. seealso:: :func:`split_notename`
     """
+    if isinstance(letter, int):
+        letter = 'CDEFGABC'[letter]
     if isinstance(alter, str):
         alterstr = alter
     else:
@@ -1476,7 +1496,107 @@ def split_cents(notename: str) -> tuple[str, int]:
     return f"{parts.octave}{parts.diatonic_name}{parts.alteration}", parts.cents_deviation
 
 
-def enharmonic(notename: str) -> str:
+def enharmonic(n: str, maxcents=50, diatonic_enharmonics=False) -> str:
+    """
+    Returns the enharmonic variant of notename
+
+    For simplicity, we considere a possible enharmonic variant a note
+    with the same sounding pitch and an alteration smaller than 150
+    cents from the note without any alteration (no double sharps or
+    flats). If diatonic_enharmonics is False, enharmonics like Fb or E#
+    are not returned.
+
+    Args:
+        notename (str): the note to find an enharmonic variant to
+        maxcents: the returned enharmonic has a cents deviation
+            lower than this. For example,
+            "4A+30" has no enharmonic and is returned as is,
+            since the only possible enharmonic would be "4Bb-70",
+            but a cents deviation of 70 is not allowed
+
+    Returns:
+        either the enharmonic variant or the note itself
+
+    =====  ===========  ================
+    Note   Enharmonic   Has Enharmonic?
+    =====  ===========  ================
+    4#     4Db           ✓
+    4C+    4Db-          ✓
+    4E     4E            –
+    4E#    4F            ✓
+    4A+10  4A+10         –
+    4E-25  4E-25         –
+    4E-    4D#+          ✓
+    =====  ===========  ================
+
+    .. seealso:: :func:`transpose`
+    """
+    mincents = 100 - maxcents
+    p = notated_pitch(n)
+    if abs(p.cents_deviation) >= 100:
+        raise ValueError(f"Invalid notename: {n}, abs. cents deviation should be lower than 100, got {p.cents_deviation}")
+    if p.chromatic_alteration == 0:
+        if p.chromatic_name not in _enharmonic_pitchclass:
+            return n
+        chrompitch, octaveoffset = _enharmonic_pitchclass[p.chromatic_name]
+        return f"{p.octave+octaveoffset}{chrompitch}"
+    if abs(p.diatonic_alteration) < 1:
+        if p.is_white_key:
+            # 4A+30 -> 4Bb-70, 4A+80 -> 4Bb-20, 4A+20 -> 4A+20, 4E-60 -> 4D#+40, 4A-80 -> 4G#+20
+            if abs(p.cents_deviation) < mincents:
+                if diatonic_enharmonics and ((p.chromatic_name in "BE" and p.cents_deviation > 0) or (p.chromatic_name in "CF" and p.cents_deviation < 0)):
+                    pitch, octaveoffset = _enharmonic_pitchclass[p.chromatic_name]
+                    cents = cents_repr(p.cents_deviation + (-100 if p.cents_deviation > 0 else 100))
+                    return f"{p.octave+octaveoffset}{pitch}{cents}"
+                return n
+            if p.diatonic_alteration > 0:
+                pitch = _flats[p.chromatic_index+1]
+                octave = p.octave if p.chromatic_index < 11 else p.octave + 1
+                return f"{octave}{pitch}{cents_repr(p.cents_deviation-100)}"
+            else:
+                pitch = _sharps[p.chromatic_index-1]
+                octave = p.octave if p.chromatic_index != 0 else p.octave - 1
+                return f"{octave}{pitch}{cents_repr(p.cents_deviation+100)}"
+        else:
+            # 4C#-20 -> 4Db-20 or 4D+80, depending on maxcents
+            # 4Db+20 -> 4C#+20 or 4D-80
+            if abs(p.cents_deviation) < 100 - maxcents:
+                pitch, octaveoffset = _enharmonic_pitchclass[p.chromatic_name]
+                return f"{p.octave+octaveoffset}{pitch}{p.cents_str}"
+            elif p.diatonic_alteration > 0:
+                # 4D#-50 -> 4D+
+                pitch = _flats[p.chromatic_index-1]
+                octave = p.octave if p.chromatic_index > 0 else p.octave - 1
+                return f"{octave}{pitch}{cents_repr(p.cents_deviation+100)}"
+            else:
+                pitch = _sharps[p.chromatic_index+1]
+                octave = p.octave if p.chromatic_index < 11 else p.octave + 1
+                return f"{octave}{pitch}{cents_repr(100-p.cents_deviation)}"
+    elif p.diatonic_alteration > 1:
+        # 4C#+20 -> 4Db+20 (if maxcents=50), 4C#+60 -> 4D-40
+        if 100 - p.cents_deviation < maxcents:
+            # 4C#+20 -> 4Db+20
+            pitch = _flats[p.chromatic_index]
+            return f"{p.octave}{pitch}{cents_repr(p.cents_deviation)}"
+        else:
+            # 4C#+60 -> 4D-40
+            pitch = _flats[p.chromatic_index+1]
+            return f"{p.octave}{pitch}{cents_repr(p.cents_deviation - 100)}"
+    else:
+        # assert p.diatonic_alteration < -1
+        # 4Ab-20 -> 4G#-20 or 4G+80, depending on maxcents
+        if 100 + p.cents_deviation > maxcents:
+            # 4Db-20 -> 4C#-20
+            pitch = _sharps[p.chromatic_index]
+            octave = p.octave - 1 if pitch == "B" else p.octave + 1 if pitch == "C" else p.octave
+            return f"{octave}{pitch}{p.cents_str}"
+        else:
+            # 4Db-60 -> 4C+40
+            pitch = _flats[p.chromatic_index-1]
+            return f"{p.octave}{pitch}{cents_repr(p.cents_deviation + 100)}"
+
+
+def _enharmonic_old(notename: str) -> str:
     """
     Returns the enharmonic variant of notename
 
@@ -1827,12 +1947,14 @@ _centsToAccidentalName = {
     100: 'sharp',
     125: 'sharp-up',
     150: 'three-quarters-sharp',
+    175: 'three-quarters-sharp-up',
     -25: 'natural-down',
     -50: 'quarter-flat',
     -75: 'flat-up',
     -100: 'flat',
     -125: 'flat-down',
-    -150: 'three-quarters-flat'
+    -150: 'three-quarters-flat',
+    -175: 'three-quarters-flat-down'
 }
 
 
