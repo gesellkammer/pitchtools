@@ -93,7 +93,7 @@ from functools import cache as _cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Union
+    from typing import Union, Sequence
 
     pitch_t = Union[str, float, int]
 
@@ -751,13 +751,13 @@ class PitchConverter:
         """
         return self.m2n(self.n2m(notename))
 
-    def as_midinotes(self, x) -> list[float]:
+    def as_midinotes(self, x: str | Sequence[str | float] | float) -> list[float]:
         """
         Tries to interpret `x` as a list of pitches, returns these as midinotes
 
         Args:
             x: either list of midinotes (floats/ints), a list of notenames (str), one
-                str with notenames (divided by spaces), or a single notename or midinote
+                str with notenames (divided by spaces or commas), or a single notename or midinote
 
         Returns:
             the corresponding list of midinotes.
@@ -771,10 +771,11 @@ class PitchConverter:
             [67., 60.]
             >>> as_midinotes("4G 4C 4C+10hz")
             [67., 60., 60.65]
-
+            >>> as_midinotes("4C,4E,4F")
+            [60., 64., 65.]
         """
         if isinstance(x, str):
-            notenames = x.split()
+            notenames = _re.split(r"[\ ,]", x)
             return [self.str2midi(n) for n in notenames]
         elif isinstance(x, (list, tuple)):
             midinotes = []
