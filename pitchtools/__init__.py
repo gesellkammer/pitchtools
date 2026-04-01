@@ -93,9 +93,8 @@ from functools import cache as _cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Union, Sequence
-
-    pitch_t = Union[str, float, int]
+    from typing import Sequence
+    # pitch_t: TypeAlias = str| float | int
 
 _EPS = sys.float_info.epsilon
 
@@ -1376,6 +1375,7 @@ def split_notename(notename: str) -> NoteParts:
     return NoteParts(*_split_notename(notename))
 
 
+@_cache
 def _split_notename(notename: str) -> tuple[int, str, str, int]:
     """
     Splits a notename into octave, letter, alteration and cents
@@ -1497,6 +1497,7 @@ def split_cents(notename: str) -> tuple[str, int]:
     return f"{parts.octave}{parts.diatonic_name}{parts.alteration}", parts.cents_deviation
 
 
+@_cache
 def enharmonic(n: str, maxcents=50, diatonic_enharmonics=False) -> str:
     """
     Returns the enharmonic variant of notename
@@ -1747,6 +1748,79 @@ def notated_interval(n0: str, n1: str) -> tuple[int, float]:
 
 
 def enharmonic_variations(notes: list[str],
+                          fixedslots: dict[int, int] | None = None,
+                          force: bool = False,
+                          ) -> list[tuple[str, ...]]:
+    """
+    Generates all enharmonic variations of the given notes
+
+    Args:
+        notes: a list of notenames
+        fixedslots: a dict of slot:alteration_direction, fixes the given slots
+            to a given alteration direction (1=#, -1=b). If Slot 0 corresponds to C,
+            1 to C+/Db-, 2 to C#/Db, etc.
+        force: if True, it will always return at least a variation even if there are
+            no valid solutions
+
+    Returns:
+        a list of enharmonic alternatives
+
+    .. seealso:: :func:`enharmonic`
+
+    """
+    #                                 C  D  E  F   G   A   B
+    NON_ENHARMONIC_SLOTS = frozenset({0, 4, 8, 10, 14, 18, 22})
+
+    if fixedslots is None:
+        fixedslots = {}
+
+    # Pre-compute outside the search
+    per_note: list[tuple[tuple[str, int, int, bool], ...]] = []
+    for n in notes:
+        variants = (n, enharmonic(n))
+        pair = []
+        for v in variants:
+            notated = notated_pitch(v)
+            slot = notated.microtone_index(semitone_divisions=2)
+            pair.append((v, slot, notated.alteration_direction(), slot in NON_ENHARMONIC_SLOTS))
+        per_note.append(tuple(pair))
+
+    results: list[tuple[str, ...]] = []
+
+    def backtrack(note_idx: int, current_slots: dict[int, int], row: list[str]) -> None:
+        if note_idx == len(per_note):
+            results.append(tuple(row))
+            return
+
+        for name, slot, direction, skip in per_note[note_idx]:
+            if skip:
+                row.append(name)
+                backtrack(note_idx + 1, current_slots, row)
+                row.pop()
+                break
+
+            fixed_dir = current_slots.get(slot)
+            if fixed_dir is not None and fixed_dir != 0 and fixed_dir != direction:
+                continue
+
+            is_new = slot not in current_slots
+            current_slots[slot] = direction
+            row.append(name)
+            backtrack(note_idx + 1, current_slots, row)
+            row.pop()
+            if is_new:
+                del current_slots[slot]
+            else:
+                current_slots[slot] = fixedslots[slot]
+
+    backtrack(0, fixedslots.copy(), [])
+
+    # Deduplicate (can still occur when both variants share the same spelling)
+    out = list(dict.fromkeys(results))
+    return out if out or not force else [tuple(notes)]
+
+
+def _enharmonic_variations(notes: list[str],
                           fixedslots: dict[int, int] | None = None,
                           force=False
                           ) -> list[tuple[str, ...]]:
@@ -2040,7 +2114,8 @@ def vertical_position_to_note(pos: int) -> str:
     return f"{octave}{step}"
 
 
-def notated_pitch(pitch: Union[float, str], semitone_divisions=4) -> NotatedPitch:
+@_cache
+def notated_pitch(pitch: float | str, semitone_divisions=4) -> NotatedPitch:
     """
     Convert a note or a (fractional) midinote to a NotatedPitch
 
@@ -2160,7 +2235,7 @@ def pitchclass(notename: str, semitone_divisions=1) -> int:
     return notated.microtone_index(semitone_divisions=semitone_divisions)
 
 
-def notes2ratio(n1: Union[float, str], n2: Union[float, str], maxdenominator=16
+def notes2ratio(n1: float|str, n2: float|str, maxdenominator=16
                 ) -> tuple[int, int]:
     """
     Find the ratio between n1 and n2

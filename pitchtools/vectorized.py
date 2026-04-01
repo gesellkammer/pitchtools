@@ -5,12 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pitchtools as pt
 
-
 import sys
 _EPS = sys.float_info.epsilon
 
 
-def f2m(freqs: np.ndarray, out: np.ndarray = None, a4: float = None) -> np.ndarray:
+def f2m(freqs: np.ndarray, out: np.ndarray = None, a4=0.) -> np.ndarray:
     """
     Vectorized version of pitchtools.f2m
 
@@ -34,15 +33,16 @@ def f2m(freqs: np.ndarray, out: np.ndarray = None, a4: float = None) -> np.ndarr
     freqs = np.asarray(freqs, dtype=float)
     a4 = a4 or pt.get_reference_freq()
     if out is None:
-        return 12.0 * np.log2(freqs/a4) + 69.0
-    x = freqs/a4
-    np.log2(x, out=x)
-    x *= 12.0
-    x += 69.0
-    return x
+        out = freqs / a4
+    else:
+        out /= a4
+    np.log2(out, out=out)
+    out *= 12.0
+    out += 69.0
+    return out
 
 
-def m2f(midinotes: np.ndarray, out: np.ndarray | None = None, a4: float = None) -> np.ndarray:
+def m2f(midinotes: np.ndarray, out: np.ndarray | None = None, a4: float = 0.) -> np.ndarray:
     """
     Vectorized version of pitchtools.m2f
 
@@ -57,10 +57,10 @@ def m2f(midinotes: np.ndarray, out: np.ndarray | None = None, a4: float = None) 
     """
     a4 = a4 or pt.get_reference_freq()
     midinotes = np.asarray(midinotes, dtype=float)
-    out = np.subtract(midinotes, 69, out=out)
-    out /= 12.
-    out = np.power(2.0, out, out)
-    out *= a4
+    arr = np.subtract(midinotes, 69, out=out)
+    arr /= 12.
+    arr = np.power(2.0, arr, out=arr)
+    arr *= a4
     return out
 
 
@@ -99,7 +99,7 @@ def amp2db(amp: np.ndarray, out: np.ndarray = None) -> np.ndarray:
     return X
 
 
-def logfreqs(notemin=0.0, notemax=139.0, notedelta=1.0) -> np.ndarray:
+def logfreqs(notemin=0.0, notemax=139.0, notedelta=1.0, a4: float = 0.) -> np.ndarray:
     """
     Return a list of frequencies corresponding to the pitch range given
 
@@ -120,16 +120,16 @@ def logfreqs(notemin=0.0, notemax=139.0, notedelta=1.0) -> np.ndarray:
         # generate a list of frequencies of instrumental 1/4 tones
         >>> logfreqs(n2m("A0"), n2m("C8"), 0.5)
     """
-    return m2f(np.arange(notemin, notemax + notedelta, notedelta))
+    return m2f(np.arange(notemin, notemax + notedelta, notedelta), a4=a4)
 
 
-def pianofreqs(start='A0', stop='C8') -> np.ndarray:
+def pianofreqs(start='A0', stop='C8', a4=0.) -> np.ndarray:
     """
     Generate an array of the frequencies representing all the piano keys
     """
     n0 = int(pt.n2m(start))
     n1 = int(pt.n2m(stop)) + 1
-    return m2f(np.arange(n0, n1, 1))
+    return m2f(np.arange(n0, n1, 1), a4=a4)
 
 
 def ratio2interval(ratios: np.ndarray) -> np.ndarray:
@@ -148,4 +148,3 @@ def interval2ratio(intervals: np.ndarray) -> np.ndarray:
     out = intervals / 12.
     np.float_power(2, out, out=out)
     return out
-

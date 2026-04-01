@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pitchtools"
-version = "1.16.2"
+version = "1.17.0"
 description = "Utilities to work with pitches, convert between midinotes, frequency and notenames"
 authors = [
     { name = "Eduardo Moguillansky", email = "eduardo.moguillansky@gmail.com" },
@@ -15,9 +15,9 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
-dependencies = []
+dependencies = ["numpy"]
 
 [tool.setuptools]
 packages = ["pitchtools"]
