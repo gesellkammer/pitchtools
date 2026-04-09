@@ -1810,8 +1810,8 @@ def enharmonic_variations(notes: list[str],
             row.pop()
             if is_new:
                 del current_slots[slot]
-            else:
-                current_slots[slot] = fixedslots[slot]
+            elif (slotval := fixedslots.get(slot)) is not None:
+                current_slots[slot] = slotval
 
     backtrack(0, fixedslots.copy(), [])
 
